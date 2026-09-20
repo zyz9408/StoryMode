@@ -54,7 +54,7 @@ export function registerRoutes(app, { store, engine, provider, imagery, storyLoc
   app.get('/api/stories', async () => store.listStories());
   app.post('/api/topics', async req => {
     const { profileId, direction, previous } = z.object({ profileId: text, direction: z.string().max(2000).default(''), previous: z.array(z.string().max(1500)).max(6).default([]) }).parse(req.body);
-    return provider.json(await store.profile(profileId), '生成模拟主题：给出4个彼此不同、可展开成15～30章的反事实小说事件。返回 {topics:[{title:简短标题,event:以假如开头的完整模拟事件,angle:主要现实约束和有趣的因果冲突}]}。根据用户方向生成，方向为空则涵盖不同历史时代、人物和有限资源穿越。不要复用上次主题。不要生成正文，不要伪称做过联网考据，避免无敌主角和无限物资。', { direction, previous }, topicsSchema);
+    return provider.json(await store.profile(profileId), '生成模拟主题：给出4个彼此不同、可展开成完整反事实小说的事件，章数随故事自然收束，最多30章。返回 {topics:[{title:简短标题,event:以假如开头的完整模拟事件,angle:主要现实约束和有趣的因果冲突}]}。根据用户方向生成，方向为空则涵盖不同历史时代、人物和有限资源穿越。不要复用上次主题。不要生成正文，不要伪称做过联网考据，避免无敌主角和无限物资。', { direction, previous }, topicsSchema);
   });
   app.post('/api/stories', async req => {
     const input = createSchema.parse(req.body); profilesExist(input);
@@ -124,7 +124,7 @@ export function registerRoutes(app, { store, engine, provider, imagery, storyLoc
     const { instruction } = z.object({ instruction: z.string().max(2000).default('') }).parse(req.body || {});
     const last = store.chapters(s.id).at(-1);
     if (s.rewrite) throw new Error('请先完成或取消正在进行的重写');
-    if (!last || last.number < 15 || !['done', 'evaluation'].includes(s.phase)) throw new Error('只有已经到达结局的故事才能补全终局');
+    if (!last || last.number < 1 || !['done', 'evaluation'].includes(s.phase)) throw new Error('只有已经到达结局的故事才能补全终局');
     s.rewrite = { mode: 'ending', number: last.number, instruction, body: '', partial: '', repairs: 0, issues: [] };
     s.status = 'paused'; s.error = ''; store.saveStory(s); launch(s.id); return { ok: true };
   });

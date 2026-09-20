@@ -36,8 +36,8 @@ export const worldSchema = z.object({
   conflicts: z.array(proseEntry).max(40).default(() => []),
 });
 export const outlineSchema = z.object({
-  plannedChapters: z.number().int().min(15).max(30),
-  outline: z.array(z.object({ number: z.number().int().min(1).max(30), title: text, purpose: text })).min(15).max(30),
+  plannedChapters: z.number().int().min(1).max(30),
+  outline: z.array(z.object({ number: z.number().int().min(1).max(30), title: text, purpose: text })).min(1).max(30),
   decisionChapters: z.array(z.number().int().min(2).max(29)).max(6).default([]), world: worldSchema,
 }).superRefine((v, ctx) => {
   if (v.outline.length !== v.plannedChapters || v.outline.some((c, i) => c.number !== i + 1)) ctx.addIssue({ code: 'custom', message: '大纲必须连续且与计划章数一致' });
@@ -144,12 +144,11 @@ export function validateTransition(before, review, number) {
   if (!review.passed) issues.push('模型一致性审核未通过');
   if (review.world.elapsedDays < before.elapsedDays) issues.push('时间发生倒退');
   issues.push(...resourceIssues(before, review));
-  if (review.finished && number < 15) issues.push('未到第 15 章，不能完结');
   if (number === 30 && !review.finished) issues.push('第 30 章必须收束主要冲突');
   if (review.finished && !review.endingReason.trim()) issues.push('完结必须说明主要冲突如何收束');
   if (!review.finished) {
     const end = review.remaining.at(-1)?.number || 0;
-    if (end < Math.max(15, number + 1) || review.remaining.some((c, i) => c.number !== number + i + 1)) issues.push('后续大纲必须连续且在 15～30 章结束');
+    if (end < number + 1 || review.remaining.some((c, i) => c.number !== number + i + 1)) issues.push('后续大纲必须连续且不超过 30 章');
   }
   return [...new Set(issues)];
 }

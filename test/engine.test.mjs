@@ -44,6 +44,24 @@ test('根据故事收束动态缩短最初20章大纲，而非固定章数',asyn
   const h=await harness(t,{initialPlanned:20,ending:15});await finish(h);
   assert.equal(h.store.story(h.id).status,'completed');assert.equal(h.store.story(h.id).plannedChapters,15);
 });
+
+test('最初规划20章也可以在第6章自然完结，并允许补全短篇终局',async t=>{
+  const h=await harness(t,{initialPlanned:20,ending:6,noDecisions:true});await finish(h);
+  const s=h.store.story(h.id);assert.equal(s.status,'completed',s.error);assert.equal(s.plannedChapters,6);assert.equal(h.store.chapters(h.id).length,6);assert.ok(s.evaluation);
+  s.rewrite={mode:'ending',number:6,body:'',partial:'',repairs:0,issues:[]};h.store.saveStory(s);await h.engine.start(h.id);
+  assert.equal(h.store.story(h.id).status,'completed',h.store.story(h.id).error);assert.equal(h.store.chapters(h.id).length,6);
+});
+
+test('没有最低章数，但第一章完结仍需完整终局和评价',async t=>{
+  const h=await harness(t,{ending:1,noDecisions:true});await finish(h);
+  const s=h.store.story(h.id);assert.equal(s.status,'completed',s.error);assert.equal(h.store.chapters(h.id).length,1);assert.ok(s.evaluation);
+  assert.deepEqual(endingIssues(h.store.chapters(h.id)[0].body,h.store.chapters(h.id)[0]),[]);
+});
+
+test('不足15章时只有阶段性胜利、缺少终局证据仍不能完结',async t=>{
+  const h=await harness(t,{ending:4,noDecisions:true,incompleteEnding:true});await finish(h);
+  const s=h.store.story(h.id);assert.equal(s.status,'failed');assert.equal(h.store.chapters(h.id).length,3);assert.equal(s.evaluation,null);assert.ok(s.draft.body);
+});
 test('整章流式中断保留草稿片段，恢复不拼入损坏片段',async t=>{
   const h=await harness(t,{disconnectSceneOnce:true});await h.engine.start(h.id);
   const s=h.store.story(h.id);assert.equal(s.status,'failed');assert.equal(s.draft.parts.length,0);assert.match(s.draft.partial,/临时草稿/);assert.equal(h.store.chapters(h.id).length,0);
@@ -118,7 +136,7 @@ test('SQLite 重启恢复检查点，重复章节写入会回滚世界更新',()
 });
 test('资源核算与章数约束不会仅依赖模型声称通过',()=>{
   const review=fixture('严格审核',{number:1,world,isDecision:false});review.world.resources[0].quantity=9000;review.finished=true;review.world.elapsedDays=-1;
-  const issues=validateTransition(world,review,1);assert.ok(issues.some(x=>x.includes('流水')));assert.ok(issues.some(x=>x.includes('倒退')));assert.ok(issues.some(x=>x.includes('15')));
+  const issues=validateTransition(world,review,1);assert.ok(issues.some(x=>x.includes('流水')));assert.ok(issues.some(x=>x.includes('倒退')));assert.ok(!issues.some(x=>x.includes('未到第 15')));
   assert.equal(countWords('甲乙， 丙！\nABC 123。'),9);
 });
 

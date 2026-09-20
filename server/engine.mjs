@@ -77,7 +77,7 @@ export class Engine extends EventEmitter {
       this.guard(signal);
       const number = this.store.chapters(s.id).length + 1;
       if (number > 30) throw new Error('已到章数上限，缺少有效结局检查点');
-      const terminal = number >= 15 && (number === 30 || number === s.plannedChapters || s.outline.length === 1);
+      const terminal = number === 30 || number === s.plannedChapters || s.outline.length === 1;
       const allowDecision = !terminal && number >= 2 && number < 30 && s.decisions.length < 3 && number - (s.decisions.at(-1)?.chapter || -2) >= 4;
       const isDecision = allowDecision && (s.decisionChapters || []).includes(number);
       const ctx = { ...this.context(s), number, isDecision, allowDecision, terminal, endingConstraint: number >= 25 ? '必须收束；第30章解决主要冲突' : '依据因果动态安排完结' };
@@ -199,7 +199,7 @@ export class Engine extends EventEmitter {
   }
   async completeEnding(s, signal) {
     const d = s.rewrite, chapters = this.store.chapters(s.id), original = chapters.at(-1);
-    if (!original || original.number !== d.number || d.number < 15) throw new Error('只能补全已完成故事的最后一章');
+    if (!original || original.number !== d.number || d.number < 1) throw new Error('只能补全已完成故事的最后一章');
     s.status = 'generating'; s.error = '';
     const profile = await this.store.profile(s.textProfile);
     const ctx = { ...this.context(s), original, number: d.number, terminal: true, allowDecision: false, isDecision: false, instruction: d.instruction };

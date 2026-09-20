@@ -85,3 +85,12 @@ test('补全终局接口只对已到结局故事开放，支持暂停取消且�
   await h.post(`${url}/cancel-rewrite`);
   assert.equal(h.store.story(h.id).status,'completed');assert.deepEqual(h.store.chapters(h.id),before);assert.deepEqual(h.store.story(h.id).evaluation,evaluation);
 });
+
+test('不足15章的已完结故事也能通过接口补全终局',async t=>{
+  const h=await harness(t,{ending:2,noDecisions:true});
+  assert.equal(h.store.story(h.id).status,'completed');
+  assert.equal((await h.post(`/api/stories/${h.id}/complete-ending`)).statusCode,200);
+  await h.app.engine.jobs.get(h.id)?.promise;
+  assert.equal(h.store.story(h.id).status,'completed',h.store.story(h.id).error);
+  assert.equal(h.store.chapters(h.id).length,2);assert.ok(h.store.story(h.id).evaluation);
+});
