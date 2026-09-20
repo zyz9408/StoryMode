@@ -13,7 +13,7 @@ test('Pages子路径：预设、浏览器直连、15章完结、生图、刷新�
   await page.goto('./');await expect(page.locator('.browser-notice')).toContainText('浏览器版');await configure(page);
   await page.getByRole('button',{name:'写作预设',exact:true}).click();
   await page.getByLabel('导入预设 JSON').setInputFiles({name:'Pages.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({prompts:[{identifier:'style',name:'紧凑',content:'动作推进叙事',enabled:true}]}))});
-  await expect(page.getByRole('status')).toContainText('已导入');await page.getByRole('button',{name:'关闭',exact:true}).click();
+  await expect(page.getByRole('status')).toContainText('已导入');await page.getByRole('button',{name:'保存并预览'}).click();await expect(page.locator('.preset-preview')).toContainText('将作为创作偏好发送');await page.getByRole('button',{name:'关闭',exact:true}).click();
   await page.getByRole('button',{name:'开启新的模拟'}).click();await page.getByLabel('你的名字').fill('浏览器旅人');await page.getByLabel('你想模拟什么？').fill('假如带着100箱佳得乐回到三国');
   await page.getByLabel('角色外形').fill('短发，灰色布衣');await page.getByRole('combobox',{name:'插图模型',exact:true}).selectOption({label:'浏览器测试 · mock-text'});
   await page.getByRole('combobox',{name:'写作预设',exact:true}).selectOption({label:'Pages'});await page.getByRole('checkbox',{name:'启用本次模拟的写作预设'}).check();

@@ -14,7 +14,8 @@ export function PresetManager({presets,story,refresh,refreshStory}:{presets:Pres
   const [id,setId]=useState(story?.presetId||presets[0]?.id||''),[draft,setDraft]=useState<Preset|null>(null);
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState(''),[preview,setPreview]=useState<Preview|null>(null);
   const [enabled,setEnabled]=useState(story?.presetEnabled||false),[search,setSearch]=useState('');
-  useEffect(()=>{setDraft(presets.find(p=>p.id===id)||null);setPreview(null);},[id,presets]);
+  useEffect(()=>{setDraft(presets.find(p=>p.id===id)||null);},[id,presets]);
+  useEffect(()=>{setPreview(null);},[id]);
   const act=async(fn:()=>Promise<void>)=>{setBusy(true);setError('');setMessage('');try{await fn();}catch(e){setError((e as Error).message);}finally{setBusy(false);}};
   const changeEntry=(index:number,patch:Partial<PresetEntry>)=>{if(draft){setDraft({...draft,entries:draft.entries.map((e,i)=>i===index?{...e,...patch}:e)});setPreview(null);}};
   const move=(index:number,step:number)=>{if(!draft)return;const entries=[...draft.entries];[entries[index],entries[index+step]]=[entries[index+step],entries[index]];setDraft({...draft,entries});setPreview(null);};

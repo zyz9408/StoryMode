@@ -11,7 +11,7 @@ async function initialize() {
   if (!navigator.locks) throw new Error('请使用支持网站存储锁的新版 Chrome、Edge、Firefox 或 Safari。');
   // One writer per application. Refresh releases the old page's lock automatically.
   await new Promise((resolve,reject)=>{
-    navigator.locks.request('storymode:'+location.pathname,{ifAvailable:true},lock=>{
+    navigator.locks.request('storymode:'+location.pathname.replace(/index\.html$/, ''),{ifAvailable:true},lock=>{
       if(!lock){reject(new Error('故事模拟器已在另一个标签页打开，请关闭该标签页后刷新。'));return;}
       resolve();return new Promise(()=>{});
     }).catch(reject);
