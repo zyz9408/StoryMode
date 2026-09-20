@@ -93,22 +93,57 @@ export function parseJson(raw, schema) {
   if (!result.success) throw new Error(`模型结构不完整：${result.error.issues.slice(0, 3).map(i => i.path.join('.') + ' ' + i.message).join('；')}`);
   return result.data;
 }
-export function validateTransition(before, review, number) {
-  const issues = [...review.issues];
-  if (!review.passed) issues.push('模型一致性审核未通过');
-  if (review.world.elapsedDays < before.elapsedDays) issues.push('时间发生倒退');
+// Add decimal JSON numbers without accumulating binary float drift (0.1 + 0.2).
+function sumResourceNumbers(a, b) {
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return NaN;
+  const parts = [a,b].map(n => {
+    const [mantissa, exponent = '0'] = String(n).toLowerCase().split('e');
+    return { digits:BigInt(mantissa.replace('.', '')), power:Number(exponent) - (mantissa.split('.')[1]?.length || 0) };
+  });
+  const power = Math.min(...parts.map(p => p.power));
+  const digits = parts.reduce((sum,p) => sum + p.digits * 10n ** BigInt(p.power - power), 0n);
+  return Number(`${digits}e${power}`);
+}
+// Flow is the authoritative numeric input; balances are calculated by the app.
+// Do not infer missing flow from a guessed model balance or change resource units.
+export function settleResources(before, review) {
+  const settled = structuredClone(review), old = new Map(before.resources.map(r => [r.id, r]));
+  const deltas = new Map();
+  for (const c of settled.resourceChanges) deltas.set(c.id, sumResourceNumbers(deltas.get(c.id) || 0, c.delta));
+  for (const resource of settled.world.resources) {
+    const prior = old.get(resource.id);
+    if (!deltas.has(resource.id) || (prior && prior.unit !== resource.unit)) continue;
+    const quantity = sumResourceNumbers(prior?.quantity || 0, deltas.get(resource.id));
+    if (Number.isFinite(quantity) && quantity >= 0) resource.quantity = quantity;
+  }
+  return settled;
+}
+export function resourceIssues(before, review) {
+  const issues = [];
   const old = new Map(before.resources.map(r => [r.id, r]));
   const next = new Map(review.world.resources.map(r => [r.id, r]));
   if (next.size !== review.world.resources.length) issues.push('资源标识重复');
   const deltas = new Map();
-  for (const c of review.resourceChanges) deltas.set(c.id, (deltas.get(c.id) || 0) + c.delta);
+  for (const c of review.resourceChanges) deltas.set(c.id, sumResourceNumbers(deltas.get(c.id) || 0, c.delta));
   for (const id of new Set([...old.keys(), ...next.keys(), ...deltas.keys()])) {
     const a = old.get(id), b = next.get(id);
     if (a && !b) issues.push(`资源 ${a.name} 被删除，耗尽应保留数量零`);
     if (a && b && a.unit !== b.unit) issues.push(`资源 ${a.name} 单位被擅自改变`);
-    if (Math.abs((b?.quantity || 0) - (a?.quantity || 0) - (deltas.get(id) || 0)) > 0.0001) issues.push(`资源 ${id} 数量与流水不符`);
+    if (Math.abs((b?.quantity || 0) - (a?.quantity || 0) - (deltas.get(id) || 0)) > 0.0001) issues.push(`资源 ${id} 数量与流水不符：原有 ${a?.quantity || 0} ${a?.unit || b?.unit || ''}，本次净变化 ${deltas.get(id) || 0}，应余 ${sumResourceNumbers(a?.quantity || 0, deltas.get(id) || 0)}，返回 ${b?.quantity || 0}`);
     if (!b && deltas.has(id)) issues.push(`流水引用未知资源 ${id}`);
   }
+  for (const [id, delta] of deltas) {
+    const balance = sumResourceNumbers(old.get(id)?.quantity || 0, delta);
+    if (!Number.isFinite(balance) || balance < 0) issues.push(`资源 ${id} 收支超出可用数量或计算溢出，不能透支`);
+  }
+  return [...new Set(issues)];
+}
+export const resourceRepairSchema = z.object({ resources:worldSchema.shape.resources, resourceChanges:reviewSchema.shape.resourceChanges });
+export function validateTransition(before, review, number) {
+  const issues = [...review.issues];
+  if (!review.passed) issues.push('模型一致性审核未通过');
+  if (review.world.elapsedDays < before.elapsedDays) issues.push('时间发生倒退');
+  issues.push(...resourceIssues(before, review));
   if (review.finished && number < 15) issues.push('未到第 15 章，不能完结');
   if (number === 30 && !review.finished) issues.push('第 30 章必须收束主要冲突');
   if (review.finished && !review.endingReason.trim()) issues.push('完结必须说明主要冲突如何收束');

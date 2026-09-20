@@ -1,5 +1,5 @@
 import { EventEmitter } from './events.mjs';
-import { setupSchema, outlineSchema, rewriteReviewSchema, reviewSchemaFor, evaluationSchema, countWords, validateTransition, narrativeIssues, endingIssues } from './schema.mjs';
+import { setupSchema, outlineSchema, rewriteReviewSchema, reviewSchemaFor, evaluationSchema, countWords, validateTransition, settleResources, resourceIssues, resourceRepairSchema, narrativeIssues, endingIssues } from './schema.mjs';
 import { setupTask, outlineTask, chapterTask, reviewTask, evaluationTask, rewriteTask, rewriteReviewTask, pacing, endingPolicy, completeEndingTask } from './prompts.mjs';
 
 export class Engine extends EventEmitter {
@@ -36,6 +36,21 @@ export class Engine extends EventEmitter {
       summaries: chapters.map((c, i) => ({ number: c.number, title: c.title, summary: c.summary.slice(0, i >= chapters.length - 3 ? 1200 : 500) })),
       recentProse: chapters.at(-1)?.body.slice(-5000) || '', decisions: s.decisions,
     };
+  }
+  async settleReview(s, review, body, profile, signal, original = null) {
+    review = settleResources(s.world, review);
+    for (let attempt = 0; ; attempt++) {
+      this.guard(signal);
+      const issues = resourceIssues(s.world, review);
+      if (!issues.length) return review;
+      if (attempt === 2) throw new Error(`资源账本两轮核对后仍未通过：${issues.join('；')}。正文草稿已保留，继续时只重新审核，不重写已有正文。`);
+      s.progress = `正在单独核对资源账本（${attempt + 1}/2），保留正文`; this.checkpoint(s, signal);
+      const result = await this.provider.json(profile,
+        '修正资源账本，只返回 {resources:[{id,name,quantity,unit,note}],resourceChanges:[{id,delta,reason}]}。依据 beforeResources 和正文，修复遗漏或重复的本次收支，id及单位保持稳定，资源耗尽保留0。delta是本次增减而非剩余量，reason必须说明正文中的实际事件。不要为了平账虚构收入、支出或借款；没有变化就没有流水。余额由程序计算，不需自行凑数。若正文实际超支，不得篡改流水掩盖矛盾，保留真实支出。original非空时只记录原末章之后新增的变化，原章已扣的收支不可重复记账。',
+        { beforeResources:s.world.resources, body, resources:review.world.resources, resourceChanges:review.resourceChanges, issues, original }, resourceRepairSchema, { signal });
+      this.guard(signal);
+      review = settleResources(s.world, { ...review, world:{ ...review.world, resources:result.resources }, resourceChanges:result.resourceChanges });
+    }
   }
   async run(s, signal) {
     if (s.rewrite) return this.rewrite(s, signal);
@@ -90,6 +105,7 @@ export class Engine extends EventEmitter {
         s.progress = `第 ${number} 章：检查字数、因果与资源${d.repairs ? `（修订 ${d.repairs}/2）` : ''}`;
         this.checkpoint(s, signal);
         review = await json(reviewTask, { ...this.context(s), number, isDecision, allowDecision, title: d.plan.title, body: d.body }, reviewSchemaFor(s.world));
+        review = await this.settleReview(s, review, d.body, profile, signal);
         this.guard(signal);
         const issues = [...validateTransition(s.world, review, number), ...narrativeIssues(d.body), ...endingIssues(d.body, review)];
         if (terminal && !review.finished) issues.push('已到计划终章，必须写完整人生、组织及时代终局，不能再扩展后续大纲');
@@ -198,8 +214,9 @@ export class Engine extends EventEmitter {
         this.guard(signal); d.body = body.trim(); d.partial = ''; this.checkpoint(s, signal);
       }
       s.progress = '审核终局的人物命运、时代结局和后人评价'; this.checkpoint(s, signal);
-      const review = await this.provider.json(profile, reviewTask + '这是对原结尾的补全：原章事件必须保留。world以原章结束为起点，resourceChanges仅记录新增的后半生及时代变迁，不要重复扣除原章已发生的消耗。', { ...ctx, body: d.body }, reviewSchemaFor(s.world), { signal });
+      let review = await this.provider.json(profile, reviewTask + '这是对原结尾的补全：原章事件必须保留。world以原章结束为起点，resourceChanges仅记录新增的后半生及时代变迁，不要重复扣除原章已发生的消耗。', { ...ctx, body: d.body }, reviewSchemaFor(s.world), { signal });
       this.guard(signal);
+      review = await this.settleReview(s, review, d.body, profile, signal, original);
       d.issues = [...validateTransition(s.world, review, d.number), ...narrativeIssues(d.body), ...endingIssues(d.body, review)];
       if (!review.finished || review.remaining.length || review.decision) d.issues.push('终局必须完成，不能留下后续大纲或待定选择');
       const words = countWords(d.body);
