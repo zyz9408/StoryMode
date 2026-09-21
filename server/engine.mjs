@@ -1,7 +1,7 @@
 import { settleScorecard } from './scorecard.mjs';
 import { recoverEndingEvidence, endingLabels, supplementEnding } from './ending-evidence.mjs';
 import { EventEmitter } from './events.mjs';
-import { setupSchema, outlineSchema, rewriteReviewSchema, reviewSchemaFor, evaluationSchema, countWords, validateTransition, settleResources, resourceIssues, resourceRepairSchema, narrativeIssues, endingIssues } from './schema.mjs';
+import { setupSchema, outlineSchema, reoutlineSchema, rewriteReviewSchema, reviewSchemaFor, evaluationSchema, countWords, validateTransition, settleResources, resourceIssues, resourceRepairSchema, narrativeIssues, endingIssues } from './schema.mjs';
 import { setupTask, outlineTask, chapterTask, reviewTask, evaluationTask, rewriteTask, rewriteReviewTask, pacing, endingPolicy, completeEndingTask } from './prompts.mjs';
 
 export class Engine extends EventEmitter {
@@ -34,7 +34,7 @@ export class Engine extends EventEmitter {
     return {
       event: s.event, player: s.name, preset: this.store.activePreset(s), protagonist: s.protagonist, setup: s.setup, grounding: s.grounding,
       research: s.researchNotes.slice(-5).map(n => ({ notes: n.notes.slice(0, 8000), query: n.query })),
-      world: s.world, outline: s.outline,
+      world: s.world, outline: s.outline, regeneration: s.regeneration,
       summaries: chapters.map((c, i) => ({ number: c.number, title: c.title, summary: c.summary.slice(0, i >= chapters.length - 3 ? 1200 : 500) })),
       recentProse: chapters.at(-1)?.body.slice(-5000) || '', decisions: s.decisions,
     };
@@ -73,6 +73,11 @@ export class Engine extends EventEmitter {
     if (s.phase === 'outline') {
       s.progress = '正在安排故事结构、人物与资源账本'; this.checkpoint(s, signal);
       const result = await json(outlineTask, this.context(s), outlineSchema);
+      this.guard(signal); Object.assign(s, result); s.phase = 'chapters'; s.status = 'generating'; this.checkpoint(s, signal);
+    }
+    if (s.phase === 'reoutline') {
+      s.progress = `正在从第 ${s.regeneration.from} 章重新规划后续故事`; this.checkpoint(s, signal);
+      const result = await json('重新规划后续故事。只依据已完成前文、当前世界和 regeneration.instruction；此前删除的未来不再成立。返回 plannedChapters（全书最终章号）、outline（从 regeneration.from 开始连续至终章的 number,title,purpose）、decisionChapters（只在重大转折安排，允许为空）。不得改写前文或重置资源。最迟30章结束，可自然提前完结。后续写作落实重生成要求。', this.context(s), reoutlineSchema(s.regeneration.from));
       this.guard(signal); Object.assign(s, result); s.phase = 'chapters'; s.status = 'generating'; this.checkpoint(s, signal);
     }
     while (s.phase === 'chapters') {

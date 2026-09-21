@@ -116,9 +116,9 @@ npm start
 
 已到结局的故事可点击「补全终局」，在保留既有事件的基础上重写最后一章并推进到人生与时代落幕，不增加章数。通过审核后事务更新末章和世界状态，再重新生成评价；终局审核通过前，失败、暂停或取消会保留原结尾，评价生成失败可继续重试评价。
 
-- 每个已完成章节顶部都有「重新生成本章」。可以填写改写要求，重写叙述、对话与节奏；关键事件、资源变化、结局与后续剧情保持一致。这不是历史分支重开。
-- 开始重写会先暂停续写。原文保持可读，只有字数和前后剧情审核通过后才事务替换；最多自动修订两轮。失败可继续重写，也可取消保留原文。刷新和重启后都保留重写检查点。
-- 重写结束后，已完结故事仍为完结，待决策故事仍等待原来的决策，其余保持暂停，可手动继续推演。
+- 每个已完成章节顶部都有「重新生成本章」。确认后从该章重新推演：保留此前章节，删除本章及全部后续章节、相关插图、后续决策与结局评分；此操作不可撤销。
+- 世界状态恢复到所选章节开始前的检查点，资源从当时余额继续核算，后续大纲仅依据保留前文与改写要求重新规划。缺少可恢复的检查点时会拒绝操作，保留故事。
+- 重新推演自动继续，遇到重大决策等待重新选择。可暂停、刷新或重启后从检查点恢复；新章节逐章审核提交并按原设置自动生图，完结后重新评分。
 - 书架每本书可点击「删除」，确认后先停止后台任务，再删除该故事的章节、草稿、评价和全部插图。此操作不可撤销；其他故事与模型连接不受影响。删除时会一并取消该故事排队和正在生成的插图。
 
 ## 暂停、断线和数据
@@ -177,9 +177,9 @@ python -m unittest discover -s test -p test_launcher.py
 | `POST /api/stories/:id/portrait` | `{prompt?, model?}` 排队生成或重试立绘 |
 | `POST /api/stories/:id/illustrations/retry` | 补齐缺失章节插图，包括失败与暂停的任务 |
 | `POST /api/stories/:id/chapters/:number/image` | `{prompt, model?}` 选择模型并本地保存插图 |
-| `POST /api/stories/:id/chapters/:number/regenerate` | `{instruction?}` 重新生成本章叙述，保留剧情事实 |
+| `POST /api/stories/:id/chapters/:number/regenerate` | `{instruction?}` 从本章重新推演，清除本章及后续内容 |
 | `POST /api/stories/:id/complete-ending` | `{instruction?}` 补全已完成故事的终局并更新评价 |
-| `POST /api/stories/:id/cancel-rewrite` | 取消重写，保留原文 |
+| `POST /api/stories/:id/cancel-rewrite` | 取消补全终局或旧版重写任务，保留原文；不适用于已确认的重新推演 |
 | `POST /api/stories/:id/delete` | `{confirm:true}` 删除故事及插图 |
 | `GET /api/stories/:id/events` | SSE 进度、正文片段与章节完成事件 |
 | `GET /api/stories/:id/export` | 导出已完成章节、决策、评价与来源 |

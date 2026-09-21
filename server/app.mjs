@@ -37,10 +37,11 @@ export async function buildApp({ dataDir = resolve('data'), store = new Store(re
     }
     if (!['GET', 'HEAD'].includes(req.method) && req.headers['x-storymode'] !== '1') return reply.code(403).send({ error: '请求缺少本地应用标识' });
   });
-  registerRoutes(app, { store, engine, provider, imagery, storyLocks, runtimePid:process.pid, deleteImages:async id => {
+  registerRoutes(app, { store, engine, provider, imagery, storyLocks, runtimePid:process.pid, deleteImages:async (id, from) => {
     let remaining = 0;
     for (const file of readdirSync(resolve(dataDir, 'images'))) {
       if (!file.startsWith(`${id}-`)) continue;
+      if (from !== undefined && !(Number(file.slice(id.length+1).split('-')[0]) >= from)) continue;
       try { unlinkSync(resolve(dataDir, 'images', file)); } catch { remaining++; }
     }
     return remaining;

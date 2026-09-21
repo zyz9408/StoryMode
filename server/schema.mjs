@@ -44,6 +44,14 @@ export const outlineSchema = z.object({
   if (v.outline.length !== v.plannedChapters || v.outline.some((c, i) => c.number !== i + 1)) ctx.addIssue({ code: 'custom', message: '大纲必须连续且与计划章数一致' });
   if (new Set(v.decisionChapters).size !== v.decisionChapters.length) ctx.addIssue({ code: 'custom', message: '决策章节不能重复' });
 });
+export const reoutlineSchema = start => z.object({
+  plannedChapters: z.number().int().min(start).max(30),
+  outline: outlineSchema.shape.outline,
+  decisionChapters: outlineSchema.shape.decisionChapters,
+}).superRefine((v, ctx) => {
+  if (v.outline.length !== v.plannedChapters - start + 1 || v.outline.some((c, i) => c.number !== start + i)) ctx.addIssue({ code:'custom', message:'后续大纲必须从重生成章节开始，连续至计划终章' });
+  if (v.decisionChapters.some(n => n < start || n >= v.plannedChapters) || new Set(v.decisionChapters).size !== v.decisionChapters.length) ctx.addIssue({ code:'custom', message:'决策必须位于尚未发生的非终局章节，且不能重复' });
+});
 export const sceneSchema = z.object({ title: text, scenes: z.array(proseEntry).min(3).max(5) });
 const endingSchema = z.object(Object.fromEntries(['protagonistDeath', 'keyPeopleFates', 'organizationFates', 'eraClosure', 'posterity'].map(key => [key, proseEntry.optional().default('')]))).nullable().default(null);
 export const reviewSchema = z.object({

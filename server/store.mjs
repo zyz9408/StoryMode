@@ -104,6 +104,14 @@ export class Store {
       this.saveStory(story); this.db.exec('COMMIT');
     } catch (e) { this.db.exec('ROLLBACK'); throw e; }
   }
+  restartFrom(story, number) {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      this.db.prepare('DELETE FROM chapters WHERE story_id=? AND number>=?').run(story.id, number);
+      this.db.prepare('DELETE FROM illustrations WHERE story_id=? AND CAST(target AS INTEGER)>=?').run(story.id, number);
+      this.saveStory(story); this.db.exec('COMMIT');
+    } catch (e) { this.db.exec('ROLLBACK'); throw e; }
+  }
   deleteStory(id) {
     this.db.exec('BEGIN IMMEDIATE');
     try {

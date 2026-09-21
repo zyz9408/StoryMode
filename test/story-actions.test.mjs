@@ -22,25 +22,43 @@ async function harness(t, options = {}) {
   return { app, store, post, dir, id: s.id, profile, mock };
 }
 
-test('重写 API：非法章号拒绝，暂停后恢复，取消保留原文与重大决策', async t => {
-  const h = await harness(t, { delay: 30 });
-  const url = `/api/stories/${h.id}`, before = h.store.chapters(h.id), pending = h.store.story(h.id).pendingDecision;
-  assert.equal((await h.post(`${url}/chapters/99/regenerate`)).statusCode, 400);
-  assert.equal((await h.post(`${url}/chapters/2/regenerate`, { instruction: '紧凑' })).statusCode, 200);
-  assert.equal((await h.post(`${url}/chapters/1/regenerate`)).statusCode, 400);
+test('中间章重新推演清除后续、恢复世界、暂停恢复不重复扣资源', async t => {
+  const h = await harness(t, { delay: 80 }), url = `/api/stories/${h.id}`, before = h.store.chapters(h.id);
+  const prefix=resolve(h.dir,'images',`${h.id}-1-old.png`), suffix=resolve(h.dir,'images',`${h.id}-2-old.png`);
+  writeFileSync(prefix,'keep');writeFileSync(suffix,'remove');
+  for(const target of ['portrait','1','2','3'])h.store.saveIllustration({storyId:h.id,target,status:'completed'});
+  assert.equal((await h.post(`${url}/chapters/99/regenerate`)).statusCode,400);
+  assert.equal((await h.post(`${url}/chapters/2/regenerate`,{instruction:'紧凑'})).statusCode,200);
   await h.post(`${url}/pause`);
-  assert.equal(h.store.story(h.id).status, 'paused');
-  assert.deepEqual(h.store.chapters(h.id), before);
-  assert.equal((await h.app.inject(url)).json().rewrite.number, 2);
-  await h.post(`${url}/resume`); await h.app.engine.jobs.get(h.id)?.promise;
-  assert.equal(h.store.story(h.id).status, 'waiting_decision');
-  assert.deepEqual(h.store.story(h.id).pendingDecision, pending);
-  assert.ok(h.store.chapters(h.id)[1].rewrittenAt);
-  const rewritten = h.store.chapters(h.id);
-  await h.post(`${url}/chapters/1/regenerate`); await h.post(`${url}/cancel-rewrite`);
-  assert.equal(h.store.story(h.id).rewrite, null);
-  assert.deepEqual(h.store.chapters(h.id), rewritten);
-  assert.deepEqual(h.store.story(h.id).pendingDecision, pending);
+  assert.deepEqual(h.store.chapters(h.id),before.slice(0,1));
+  assert.equal(h.store.story(h.id).world.resources[0].quantity,2399);
+  assert.equal(h.store.story(h.id).pendingDecision,null);
+  assert.equal(h.store.story(h.id).regeneration.from,2);
+  assert.deepEqual(h.store.illustrations(h.id).map(j=>j.target).sort(),['1','portrait']);
+  assert.ok(existsSync(prefix));assert.equal(existsSync(suffix),false);
+  await h.post(`${url}/resume`);await h.app.engine.jobs.get(h.id)?.promise;
+  assert.equal(h.store.story(h.id).status,'waiting_decision');
+  assert.equal(h.store.story(h.id).world.resources[0].quantity,2397);
+  assert.deepEqual(h.store.chapters(h.id)[0],before[0]);
+  assert.equal(h.store.chapters(h.id)[1].title,'重新推演2');
+});
+
+test('完结故事从中间重生成：旧决策和评分失效，只用保留前文规划并重新完结',async t=>{
+  const h=await harness(t,{ending:5,noDecisions:true}),url=`/api/stories/${h.id}`;
+  const before=h.store.chapters(h.id),s=h.store.story(h.id);
+  s.decisions=[{chapter:1,choice:'保留决定'},{chapter:4,choice:'废弃决定'}];h.store.saveStory(s);
+  assert.equal(s.status,'completed');
+  await h.post(`${url}/chapters/3/regenerate`,{instruction:'改走水路'});
+  assert.equal(h.store.story(h.id).evaluation,null);
+  assert.deepEqual(h.store.story(h.id).decisions,[{chapter:1,choice:'保留决定'}]);
+  await h.app.engine.jobs.get(h.id)?.promise;
+  assert.equal(h.store.story(h.id).status,'completed');
+  assert.equal(h.store.story(h.id).world.resources[0].quantity,2395);
+  assert.deepEqual(h.store.chapters(h.id).slice(0,2),before.slice(0,2));
+  const call=h.mock.calls.map(c=>c.body.messages?.at(-1)?.content).filter(Boolean).map(JSON.parse).find(c=>c.task.startsWith('重新规划后续故事'));
+  assert.deepEqual(call.context.summaries.map(c=>c.number),[1,2]);
+  assert.equal(call.context.regeneration.instruction,'改走水路');
+  assert.equal(call.context.world.resources[0].quantity,2398);
 });
 
 test('删除运行中的故事先停止任务，不复活章节，同时清理图片并保留其他故事与配置', async t => {
@@ -107,4 +125,20 @@ test('旧故事可单独生成趣味评分；评分失败保留原评价、正�
   h.app.engine.provider.json=async(...args)=>{const r=await json(...args);if(args[1].startsWith('根据实际完成章节'))r.scorecard.cards[0].chapters=[999];return r;};
   await h.post(`${url}/reevaluate`);await h.app.engine.jobs.get(h.id)?.promise;
   assert.equal(h.store.story(h.id).status,'failed');assert.deepEqual(h.store.story(h.id).evaluation,done.evaluation);assert.deepEqual(h.store.chapters(h.id),chapters);
+});
+
+
+test('重新推演事务失败或首章缺检查点时保留已有章节与世界',async t=>{
+  const h=await harness(t,{ending:2,noDecisions:true}),url=`/api/stories/${h.id}`;
+  const before=h.store.chapters(h.id),state=h.store.story(h.id),save=h.store.saveStory;
+  h.store.saveStory=()=>{throw new Error('模拟存储失败');};
+  assert.equal((await h.post(`${url}/chapters/2/regenerate`)).statusCode,400);
+  h.store.saveStory=save;
+  assert.deepEqual(h.store.chapters(h.id),before);
+  assert.deepEqual(h.store.story(h.id),state);
+  const legacy={...before[0]};delete legacy.beforeWorld;
+  h.store.commitRewrite(state,legacy);
+  const old=h.store.chapters(h.id);
+  assert.equal((await h.post(`${url}/chapters/1/regenerate`)).statusCode,400);
+  assert.deepEqual(h.store.chapters(h.id),old);
 });

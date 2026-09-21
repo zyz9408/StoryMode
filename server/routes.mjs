@@ -114,8 +114,17 @@ export function registerRoutes(app, { store, engine, provider, imagery, storyLoc
     try {
       await engine.pause(id);
       const s = get(id);
-      s.rewrite = { number, instruction, body: '', partial: '', repairs: 0, issues: [] };
-      s.status = 'paused'; s.error = ''; store.saveStory(s); launch(id);
+      const chapters = store.chapters(id), target = chapters.find(c => c.number === number);
+      const world = target?.beforeWorld || chapters.find(c => c.number === number - 1)?.world;
+      if (!world) throw new Error('该章节缺少开篇世界检查点，无法安全重新推演');
+      await imagery.pause(id);
+      Object.assign(s, { world, regeneration: { from:number, instruction }, rewrite:null,
+        decisions:s.decisions.filter(d => d.chapter < number), pendingDecision:null,
+        evaluation:null, endingReason:'', draft:null, outline:[], decisionChapters:[],
+        phase:'reoutline', status:'preparing', error:'', progress:`正在从第 ${number} 章重新推演` });
+      await store.restartFrom(s, number);
+      await deleteImages(id, number);
+      engine.emit(id, { type:'state', status:s.status, progress:s.progress }); launch(id);
       return { ok: true };
     } finally { storyLocks.delete(id); }
   });

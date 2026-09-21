@@ -74,6 +74,21 @@ export class BrowserStore {
   saveImage(id,number,image,imagePrompt) { const c=this.chapters(id).find(c=>c.number===number);if(!c)throw new Error('章节不存在');Object.assign(c,{image,imagePrompt});this.put('chapters',id+':'+number,c);return c; }
   illustrations(id) { return clone([...this.data.illustrations.values()].filter(j=>j.storyId===id)); }
   saveIllustration(j) { this.put('illustrations',j.storyId+':'+j.target,j); }
+  async restartFrom(s, number) {
+    s.updated=new Date().toISOString();
+    const changes=[['stories',s.id,s]], images=new Set();
+    for (const table of ['chapters','illustrations']) for (const [key,value] of this.data[table]) {
+      if (!key.startsWith(s.id+':') || Number(table==='chapters'?value.number:value.target)<number || !Number.isFinite(Number(table==='chapters'?value.number:value.target))) continue;
+      changes.push([table,key,undefined]);
+      if(value.image?.startsWith('browser-image:'))images.add(value.image.slice(14));
+    }
+    for(const key of images)changes.push(['images',key,undefined]);
+    await this.write(changes);
+    for(const [table,key,value] of changes) {
+      if(value===undefined)this.data[table].delete(key);else this.data[table].set(key,clone(value));
+      if(table==='images' && this.urls.has(key)){URL.revokeObjectURL(this.urls.get(key));this.urls.delete(key);}
+    }
+  }
   deleteStory(id) {
     const changes=[['stories',id,undefined]];
     for(const table of ['chapters','illustrations','images']) for(const [key,value] of this.data[table]) if(key.startsWith(id+':')||value.storyId===id)changes.push([table,key,undefined]);

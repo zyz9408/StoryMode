@@ -44,11 +44,17 @@ test('桌面到移动端：配置 → 开局 → 三次决策 → 结局 → 插
   await expect(page.locator('.chapter-nav .selected')).toContainText('江陵记事2');
   await page.locator('[data-chapter="2"]').getByRole('button',{name:'重新生成本章'}).click();
   await page.getByLabel('这次希望怎么写？').fill('删掉无用细节，让对话更紧凑');
-  await page.getByRole('button',{name:'开始重新生成'}).click();
-  await expect(page.locator('.progress-bar')).toContainText('第 2 章已重新生成',{timeout:30000});
+  await expect(page.getByRole('dialog')).toContainText('本章及之后所有章节');await page.getByRole('button',{name:'开始重新生成'}).click();
+  for(const number of [3,7,11]) {
+    await expect(page.locator('.decision-box .eyebrow')).toContainText(`第 ${number} 章`,{timeout:30000});
+    await page.reload();await expect(page.getByRole('heading',{name:'这一次，由你决定。'})).toBeVisible();
+    await page.getByRole('button',{name:/A\s*冒险庇护来客/}).click();await page.getByRole('button',{name:'作出选择，继续故事'}).click();
+  }
+  await expect(page.locator('.progress-bar')).toContainText('本次模拟已完成',{timeout:30000});
+  await page.locator('.chapter-nav').getByRole('button',{name:/江陵记事3$/}).click();
   await expect(page.locator('[data-chapter="3"]')).toHaveCount(1);
   await page.reload();await expect(page.locator('.story-tags')).toContainText('15 / 15 章');
-  await page.getByRole('button',{name:'人物与世界'}).click();await expect(page.locator('table')).toContainText('2384');
+  await page.getByRole('button',{name:'人物与世界'}).click();await expect(page.locator('table')).toContainText('2385');
   await page.locator('.reader-heading').scrollIntoViewIfNeeded();
   await page.screenshot({path:'test-results/reader-desktop.png',fullPage:false});
   await page.setViewportSize({width:390,height:844});await page.locator('.reader-heading').scrollIntoViewIfNeeded();await page.screenshot({path:'test-results/reader-mobile.png',fullPage:false});
