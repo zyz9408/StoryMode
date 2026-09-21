@@ -214,6 +214,43 @@ test('终局必须提供五项正文依据，摘要、假引文或少一项都�
   for(const key of Object.keys(endingEvidence))assert.equal(endingIssues(body,{finished:true,ending:{...endingEvidence,[key]:'这不是正文中的依据'}}).length,1);
 });
 
+test('终局审核反复改写引文时只恢复证据，不重写整章',async t=>{
+  const h=await harness(t,{ending:2,noDecisions:true});
+  const json=h.engine.provider.json.bind(h.engine.provider);
+  h.engine.provider.json=async(...args)=>{
+    const result=await json(...args);
+    if(args[1].startsWith('严格审核')&&result.finished){result.ending.keyPeopleFates='对配角命运的摘要并不是引文';result.ending.eraClosure='对新时代的摘要并不是引文';}
+    return result;
+  };
+  await finish(h);const s=h.store.story(h.id);assert.equal(s.status,'completed',s.error);
+  const tasks=h.mock.calls.map(c=>JSON.parse(c.body.messages.at(-1).content).task);
+  assert.equal(tasks.filter(t=>t.startsWith('核对终局证据')).length,1);assert.equal(tasks.filter(t=>t.startsWith('按审核问题')).length,0);
+  assert.deepEqual(endingIssues(h.store.chapters(h.id)[1].body,h.store.chapters(h.id)[1]),[]);
+});
+
+test('终局缺少配角与时代结局时定向补写，再审核提交且不重复扣资源',async t=>{
+  const h=await harness(t,{ending:2,noDecisions:true});const text=h.engine.provider.text.bind(h.engine.provider);
+  h.engine.provider.text=async(...args)=>{
+    let body=await text(...args);
+    if(args[1].startsWith('写完整一章')&&args[2].number===2)body=body.replace(endingEvidence.keyPeopleFates,'').replace(endingEvidence.eraClosure,'');
+    return body;
+  };
+  await finish(h);const s=h.store.story(h.id);assert.equal(s.status,'completed',s.error);
+  assert.equal(s.world.resources[0].quantity,2398);assert.equal(h.store.chapters(h.id).length,2);
+  const tasks=h.mock.calls.map(c=>JSON.parse(c.body.messages.at(-1).content).task);
+  assert.equal(tasks.filter(t=>t.startsWith('补写终局缺项')).length,1);assert.equal(tasks.filter(t=>t.startsWith('按审核问题')).length,0);
+});
+
+test('已耗尽修订次数的旧失败草稿可重新核对引文后直接完结',async t=>{
+  const h=await harness(t,{ending:2,noDecisions:true,incompleteEnding:true});await finish(h);
+  const failed=h.store.story(h.id);assert.equal(failed.status,'failed');assert.equal(failed.draft.repairs,2);
+  const savedBody=failed.draft.body,json=h.engine.provider.json.bind(h.engine.provider);
+  h.engine.provider.json=async(...args)=>args[1].startsWith('核对终局证据')?fixture(args[1],args[2]):json(...args);
+  await h.engine.start(h.id);
+  const done=h.store.story(h.id);assert.equal(done.status,'completed',done.error);assert.equal(h.store.chapters(h.id)[1].body,savedBody);
+  assert.equal(done.world.resources[0].quantity,2398);
+});
+
 test('只打赢战争但未交代命运的最后一章不能完结，保留原世界和草稿',async t=>{
   const h=await harness(t,{incompleteEnding:true});await finish(h);
   const s=h.store.story(h.id);assert.equal(s.status,'failed');assert.equal(h.store.chapters(h.id).length,14);
@@ -234,6 +271,8 @@ test('补全旧终局只替换末章并重新评价，新增资源变化与原�
 
 test('补全终局审核失败时原末章、评价与资源状态全部保留',async t=>{
   const h=await harness(t);await finish(h);const before=h.store.chapters(h.id),s=h.store.story(h.id);
+  const text=h.engine.provider.text.bind(h.engine.provider);
+  h.engine.provider.text=async(...args)=>{const body=await text(...args);return args[1].startsWith('补全已有故事')?Object.values(endingEvidence).reduce((s,quote)=>s.replace(quote,''),body):body;};
   const json=h.engine.provider.json.bind(h.engine.provider);
   h.engine.provider.json=async(...args)=>{const result=await json(...args);if(args[1].startsWith('严格审核'))result.ending=null;return result;};
   s.rewrite={mode:'ending',number:15,body:'',partial:'',repairs:0,issues:[]};h.store.saveStory(s);

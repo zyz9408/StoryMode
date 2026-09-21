@@ -1,3 +1,4 @@
+import { recoverEndingEvidence, endingLabels, supplementEnding } from './ending-evidence.mjs';
 import { EventEmitter } from './events.mjs';
 import { setupSchema, outlineSchema, rewriteReviewSchema, reviewSchemaFor, evaluationSchema, countWords, validateTransition, settleResources, resourceIssues, resourceRepairSchema, narrativeIssues, endingIssues } from './schema.mjs';
 import { setupTask, outlineTask, chapterTask, reviewTask, evaluationTask, rewriteTask, rewriteReviewTask, pacing, endingPolicy, completeEndingTask } from './prompts.mjs';
@@ -106,6 +107,7 @@ export class Engine extends EventEmitter {
         this.checkpoint(s, signal);
         review = await json(reviewTask, { ...this.context(s), number, isDecision, allowDecision, title: d.plan.title, body: d.body }, reviewSchemaFor(s.world));
         review = await this.settleReview(s, review, d.body, profile, signal);
+        review = await recoverEndingEvidence(this.provider, profile, d.body, review, signal);
         this.guard(signal);
         const issues = [...validateTransition(s.world, review, number), ...narrativeIssues(d.body), ...endingIssues(d.body, review)];
         if (terminal && !review.finished) issues.push('已到计划终章，必须写完整人生、组织及时代终局，不能再扩展后续大纲');
@@ -118,8 +120,15 @@ export class Engine extends EventEmitter {
         if (!issues.length) break;
         if (d.repairs >= 2) throw new Error(`本章两轮修订后仍未通过：${issues.join('；')}。草稿已保存，可手动重试。`);
         d.repairs++; d.partial = ''; s.progress = `第 ${number} 章：修订 ${d.repairs}/2`; this.checkpoint(s, signal);
+        const endingProblems = endingIssues(d.body, review);
+        if (endingProblems.length && issues.length === endingProblems.length) {
+          s.progress = '正在定向补齐终局缺项，保留已有正文'; this.checkpoint(s, signal);
+          const supplemented = await supplementEnding(this.provider, profile, d.body, review, this.context(s), signal);
+          this.guard(signal);
+          if (supplemented) { d.body = supplemented; this.checkpoint(s, signal); continue; }
+        }
         let lastSave = 0;
-        const revised = await this.provider.text(profile, '按审核问题修订完整一章，只返回完整小说正文。必须3000～8000个非标点文字。通过增加必要行动、阻碍与后果补足，禁止复述凑字数。保留已通过的情节和人物动机，不修改此前章节。' + pacing + (d.finalizing ? endingPolicy : ''), { ...this.context(s), number, isDecision, allowDecision, terminal: d.finalizing, plan: d.plan, body: d.body, issues }, { signal, onToken: token => {
+        const revised = await this.provider.text(profile, '按审核问题修订完整一章，只返回完整小说正文。必须3000～8000个非标点文字。通过增加必要行动、阻碍与后果补足，禁止复述凑字数。保留已通过的情节和人物动机，不修改此前章节。' + pacing + (d.finalizing ? endingPolicy + '对缺失的终局项逐项补齐实际发生的后传事实，明确重要配角姓名及其最终归宿、时代结束的时间与原因及接替秩序。保留已经完成的其他终局项；不能只改措辞或反复描述胜利。' : ''), { ...this.context(s), endingRequirements:d.finalizing ? endingLabels : undefined, number, isDecision, allowDecision, terminal: d.finalizing, plan: d.plan, body: d.body, issues }, { signal, onToken: token => {
           d.partial += token; this.emit(s.id, { type: 'token', number, token });
           if (Date.now() - lastSave > 1200) { this.store.saveStory(s); lastSave = Date.now(); }
         } });
@@ -176,10 +185,14 @@ export class Engine extends EventEmitter {
         this.guard(signal); d.body = body.trim(); d.partial = ''; this.checkpoint(s, signal);
       }
       s.progress = `第 ${d.number} 章：检查重写与前后剧情是否一致`; this.checkpoint(s, signal);
-      const review = await this.provider.json(profile, rewriteReviewTask, { ...ctx, body: d.body }, rewriteReviewSchema, { signal });
+      let review = await this.provider.json(profile, rewriteReviewTask, { ...ctx, body: d.body }, rewriteReviewSchema, { signal });
       this.guard(signal);
       d.issues = [...review.issues, ...narrativeIssues(d.body)];
-      if (original.ending) d.issues.push(...endingIssues(d.body, { ...review, finished: true }));
+      if (original.ending) {
+        review = await recoverEndingEvidence(this.provider, profile, d.body, { ...review, finished:true }, signal);
+        this.guard(signal);
+        d.issues.push(...endingIssues(d.body, review));
+      }
       if (!review.passed) d.issues.push('重写与原有剧情不一致');
       const words = countWords(d.body);
       if (words < 3000 || words > 8000) d.issues.push(`正文为${words}字，需要3000～8000字`);
@@ -217,6 +230,7 @@ export class Engine extends EventEmitter {
       let review = await this.provider.json(profile, reviewTask + '这是对原结尾的补全：原章事件必须保留。world以原章结束为起点，resourceChanges仅记录新增的后半生及时代变迁，不要重复扣除原章已发生的消耗。', { ...ctx, body: d.body }, reviewSchemaFor(s.world), { signal });
       this.guard(signal);
       review = await this.settleReview(s, review, d.body, profile, signal, original);
+      review = await recoverEndingEvidence(this.provider, profile, d.body, review, signal);
       d.issues = [...validateTransition(s.world, review, d.number), ...narrativeIssues(d.body), ...endingIssues(d.body, review)];
       if (!review.finished || review.remaining.length || review.decision) d.issues.push('终局必须完成，不能留下后续大纲或待定选择');
       const words = countWords(d.body);

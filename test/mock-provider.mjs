@@ -11,6 +11,8 @@ export const endingEvidence = {
   posterity:'乡人记得他的援手，也怨他逐利；后世在这条推演历史中只留下地方商人的复杂评价。',
 };
 export function fixture(task, ctx, options = {}) {
+  if(task.startsWith('补写终局缺项')) return {passages:Object.keys(ctx.missing).map(key=>({key,text:endingEvidence[key]}))};
+  if(task.startsWith('核对终局证据')) return {selections:Object.fromEntries(Object.entries(endingEvidence).map(([key,quote])=>[key,options.incompleteEnding ? [] : ctx.passages.filter(p=>quote.includes(p.text.trim())).map(p=>p.id)]))};
   const ending = options.ending || 15;
   if(task.startsWith('生成模拟主题')) return {topics:Array.from({length:4},(_,i)=>({title:`有限资源的选择${i+1}`,event:`假如带着${i+1}箱现代工具回到古代，需要在有限物资下找到谋生方式。`,angle:'运输、信息与信任都有成本，不能凭物资获得无限权力。'}))};
   if(task.startsWith('解析玩家事件')) return {...setup,...(ctx.event?.includes('关羽')?{kind:'历史改写',identity:'以关羽等历史人物为主，玩家仅署名'}:{})};
