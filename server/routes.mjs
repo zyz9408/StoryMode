@@ -119,6 +119,11 @@ export function registerRoutes(app, { store, engine, provider, imagery, storyLoc
       return { ok: true };
     } finally { storyLocks.delete(id); }
   });
+  app.post('/api/stories/:id/reevaluate', async req => {
+    const s=get(req.params.id);idle(s.id);
+    if(s.rewrite || !['done','evaluation'].includes(s.phase) || !store.chapters(s.id).length)throw new Error('故事完结后才能重新生成评价');
+    s.phase='evaluation';s.status='generating';s.error='';store.saveStory(s);launch(s.id);return {ok:true};
+  });
   app.post('/api/stories/:id/complete-ending', async req => {
     const s = get(req.params.id); idle(s.id);
     const { instruction } = z.object({ instruction: z.string().max(2000).default('') }).parse(req.body || {});
@@ -192,6 +197,22 @@ export function registerRoutes(app, { store, engine, provider, imagery, storyLoc
     for (const c of chapters) parts.push(`## 第 ${c.number} 章 ${c.title}\n\n${c.body}`);
     if (s.decisions.length) parts.push('## 玩家决策\n\n' + s.decisions.map(d => `第 ${d.chapter} 章：${d.question}\n\n选择：${d.choice}`).join('\n\n'));
     if (s.evaluation) parts.push(`## 结局评价\n\n${s.evaluation.conclusion}\n\n` + s.evaluation.dimensions.map(d => `### ${d.name}\n\n${d.assessment}\n\n依据：第 ${d.chapters.join('、')} 章`).join('\n\n') + `\n\n${s.evaluation.uncertainties}`);
+    if (s.evaluation?.scorecard) {
+      const score=s.evaluation.scorecard;
+      parts.push(`## 模拟结算 · ${score.total}/100 · ${score.grade}级
+
+${score.title}
+
+${score.summary}
+
+`+score.cards.map(c=>`### ${c.category} · ${c.name} · ${c.score===null?'未涉及':c.score+'/100'}
+
+${c.title}
+
+${c.comment}
+
+依据：${c.chapters.length?'第 '+c.chapters.join('、')+' 章':'未涉及'}`).join('\n\n')+'\n\n娱乐评分；权重为主角30%、势力25%、朋友20%、对手10%、时代影响15%，未涉及项不计入总分。');
+    }
     if (s.sources.length) parts.push('## 考据来源\n\n' + s.sources.map(x => `- [${x.title}](${x.url})`).join('\n'));
     reply.type('text/markdown; charset=utf-8').header('Content-Disposition', `attachment; filename="story-${s.id}.md"`).send(parts.join('\n\n---\n\n'));
   });

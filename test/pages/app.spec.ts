@@ -40,6 +40,9 @@ test('Pages子路径：预设、浏览器直连、15章完结、生图、刷新�
     await page.getByRole('button',{name:/A\s*冒险庇护来客/}).click();await page.getByRole('button',{name:'作出选择，继续故事'}).click();
   }
   await expect(page.locator('.progress-bar')).toContainText('本次模拟已完成',{timeout:30000});await expect(page.locator('.chapter-image').first()).toBeVisible();
+  await page.getByRole('button',{name:/终\s*结局评价/}).click();await expect(page.locator('.score-total')).toContainText('72');await expect(page.locator('.score-item')).toHaveCount(5);
+  await page.getByRole('button',{name:'重新生成评分',exact:true}).click();await expect(page.locator('.progress-bar')).toContainText('本次模拟已完成');await expect(page.locator('.score-total')).toContainText('72');
+  await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();await page.setViewportSize({width:1440,height:1000});
   await page.reload();await expect(page.locator('.story-tags')).toContainText('15 / 15 章');await expect(page.locator('.chapter-image').first()).toBeVisible();
   await page.locator('.chapter-nav').getByRole('button',{name:/江陵记事2$/}).click();await page.locator('[data-chapter="2"]').getByRole('button',{name:'重新生成本章'}).click();await page.getByRole('button',{name:'开始重新生成'}).click();await expect(page.locator('.progress-bar')).toContainText('第 2 章已重新生成');
   const download=page.waitForEvent('download');await page.getByRole('link',{name:'导出 Markdown'}).click();const file=await download;expect(file.suggestedFilename()).toMatch(/story-.*\.md/);

@@ -94,3 +94,17 @@ test('不足15章的已完结故事也能通过接口补全终局',async t=>{
   assert.equal(h.store.story(h.id).status,'completed',h.store.story(h.id).error);
   assert.equal(h.store.chapters(h.id).length,2);assert.ok(h.store.story(h.id).evaluation);
 });
+
+test('旧故事可单独生成趣味评分；评分失败保留原评价、正文与世界状态',async t=>{
+  const h=await harness(t,{ending:2,noDecisions:true}),url=`/api/stories/${h.id}`;
+  const old=h.store.story(h.id);delete old.evaluation.scorecard;h.store.saveStory(old);
+  const chapters=h.store.chapters(h.id),world=old.world;
+  assert.equal((await h.post(`${url}/reevaluate`)).statusCode,200);await h.app.engine.jobs.get(h.id)?.promise;
+  const done=h.store.story(h.id);assert.equal(done.evaluation.scorecard.total,72);assert.equal(done.status,'completed');
+  assert.deepEqual(h.store.chapters(h.id),chapters);assert.deepEqual(done.world,world);
+  const exported=await h.app.inject({method:'GET',url:url+'/export'});assert.match(exported.body,/模拟结算 · 72\/100/);
+  const json=h.app.engine.provider.json.bind(h.app.engine.provider);
+  h.app.engine.provider.json=async(...args)=>{const r=await json(...args);if(args[1].startsWith('根据实际完成章节'))r.scorecard.cards[0].chapters=[999];return r;};
+  await h.post(`${url}/reevaluate`);await h.app.engine.jobs.get(h.id)?.promise;
+  assert.equal(h.store.story(h.id).status,'failed');assert.deepEqual(h.store.story(h.id).evaluation,done.evaluation);assert.deepEqual(h.store.chapters(h.id),chapters);
+});

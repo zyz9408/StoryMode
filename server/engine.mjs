@@ -1,3 +1,4 @@
+import { settleScorecard } from './scorecard.mjs';
 import { recoverEndingEvidence, endingLabels, supplementEnding } from './ending-evidence.mjs';
 import { EventEmitter } from './events.mjs';
 import { setupSchema, outlineSchema, rewriteReviewSchema, reviewSchemaFor, evaluationSchema, countWords, validateTransition, settleResources, resourceIssues, resourceRepairSchema, narrativeIssues, endingIssues } from './schema.mjs';
@@ -157,7 +158,8 @@ export class Engine extends EventEmitter {
       const evaluation = await json(evaluationTask, { ...this.context(s), endingReason: s.endingReason }, evaluationSchema);
       this.guard(signal);
       const count = this.store.chapters(s.id).length;
-      if (evaluation.dimensions.some(d => d.chapters.some(n => n > count))) throw new Error('评价引用不存在的章节，请重试评价');
+      if ([...evaluation.dimensions,...evaluation.scorecard.cards].some(d => d.chapters.some(n => n > count))) throw new Error('评价引用不存在的章节，请重试评价');
+      evaluation.scorecard = settleScorecard(evaluation.scorecard);
       s.evaluation = evaluation; s.phase = 'done'; s.status = 'completed'; s.progress = '本次模拟已完成'; this.checkpoint(s, signal);
     }
   }

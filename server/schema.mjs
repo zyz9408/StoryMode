@@ -1,3 +1,4 @@
+import { scorecardSchema } from './scorecard.mjs';
 import { z } from 'zod';
 
 export const text = z.string().trim().min(1).max(16000);
@@ -64,6 +65,7 @@ export function reviewSchemaFor(previousWorld) {
   return reviewSchema.extend({ world: worldSchema.extend(fields) });
 }
 export const evaluationSchema = z.object({
+  scorecard:scorecardSchema,
   conclusion: text,
   dimensions: z.array(z.object({ name: text, assessment: text, chapters: z.array(z.number().int().positive()).min(1) })).min(6).max(8),
   uncertainties: text,
