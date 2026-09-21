@@ -34,6 +34,7 @@ export class Engine extends EventEmitter {
     return {
       event: s.event, player: s.name, preset: this.store.activePreset(s), protagonist: s.protagonist, setup: s.setup, grounding: s.grounding,
       research: s.researchNotes.slice(-5).map(n => ({ notes: n.notes.slice(0, 8000), query: n.query })),
+      sources: s.sources,
       world: s.world, outline: s.outline, regeneration: s.regeneration,
       summaries: chapters.map((c, i) => ({ number: c.number, title: c.title, summary: c.summary.slice(0, i >= chapters.length - 3 ? 1200 : 500) })),
       recentProse: chapters.at(-1)?.body.slice(-5000) || '', decisions: s.decisions,
@@ -56,11 +57,20 @@ export class Engine extends EventEmitter {
   }
   async run(s, signal) {
     if (s.rewrite) return this.rewrite(s, signal);
-    s.offline = true; s.grounding = 'model'; s.researchProfile = '';
     s.error = ''; s.status = s.phase === 'chapters' || s.phase === 'evaluation' ? 'generating' : 'preparing';
     this.publish(s);
     const profile = await this.store.profile(s.textProfile);
     const json = (task, ctx, schema) => this.provider.json(profile, task, ctx, schema, { signal });
+    if (!s.offline && !s.researchNotes.length && !['setup', 'confirm'].includes(s.phase)) {
+      s.progress = '正在联网考据背景并核对来源'; this.checkpoint(s, signal);
+      const researchProfile = await this.store.profile(s.researchProfile);
+      const query = JSON.stringify({ event: s.event, setup: s.setup });
+      const result = await this.provider.research(researchProfile, query, { signal });
+      this.guard(signal);
+      s.researchNotes.push({ query, notes: result.notes, evidence: result.evidence });
+      s.sources = [...new Map([...s.sources, ...result.sources].map(source => [source.url, source])).values()];
+      s.grounding = 'verified'; this.checkpoint(s, signal);
+    }
     if (s.phase === 'setup') {
       s.progress = '正在解析事件与开局假设'; this.checkpoint(s, signal);
       s.setup = await json(setupTask, { name: s.name, event: s.event, protagonist: s.protagonist }, setupSchema);

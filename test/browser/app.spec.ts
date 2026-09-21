@@ -9,7 +9,7 @@ test('桌面到移动端：配置 → 开局 → 三次决策 → 结局 → 插
   // Verify loading models before a model is selected.
   await page.getByRole('button',{name:'载入列表'}).click();await expect(page.getByRole('status')).toContainText('已载入 4 个模型');
   await page.getByLabel('模型名称').fill('mock-text');await page.getByRole('button',{name:'保存配置',exact:true}).click();await expect(page.getByRole('status')).toContainText('配置已保存');
-  await expect(page.getByRole('button',{name:'检测联网能力'})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'检测联网能力'})).toBeVisible();
   await page.getByRole('button',{name:'关闭',exact:true}).click();
   await page.getByRole('button',{name:'开启新的模拟'}).click();await page.getByLabel('你的名字').fill('林舟');
   await page.getByLabel('角色外形').fill('黑色短发、左眉有浅疤，身材瘦高，穿灰色布衣');await page.getByLabel('角色性格').fill('谨慎但护短');await page.getByLabel('角色背景').fill('普通仓库管理员，熟悉货物保管');
@@ -75,13 +75,16 @@ test('桌面到移动端：配置 → 开局 → 三次决策 → 结局 → 插
   expect(errors).toEqual([]);
 });
 
-test('管理密钥接入、关闭搜索、AI 主题及生图列表选择',async({page})=>{
+test('管理密钥接入、联网检测、AI 主题及生图列表选择',async({page})=>{
   await page.goto('/');await page.getByRole('button',{name:'模型连接'}).click();
   await page.getByLabel('连接方式').selectOption('management');await page.getByLabel('配置名称').fill('管理端测试');
   await page.getByLabel('Base URL').fill('http://127.0.0.1:3213/management.html');await page.getByPlaceholder('填写管理密钥').fill('management-test');
   await page.getByRole('button',{name:'载入列表'}).click();await expect(page.getByRole('status')).toContainText('已载入 4 个模型');
-  await page.getByLabel('从列表选择模型').selectOption('gemini-search');await page.getByRole('button',{name:'保存配置',exact:true}).click();await expect(page.getByRole('status')).toContainText('配置已保存');await expect(page.getByRole('button',{name:'检测联网能力'})).toHaveCount(0);
+  await page.getByLabel('从列表选择模型').selectOption('gemini-search');await page.getByRole('button',{name:'保存配置',exact:true}).click();await expect(page.getByRole('status')).toContainText('配置已保存');await expect(page.getByRole('button',{name:'检测联网能力'})).toBeVisible();
   await page.getByRole('button',{name:'关闭',exact:true}).click();await page.getByRole('button',{name:'开启新的模拟'}).click();
+  await page.getByLabel('开启联网考据',{exact:true}).check();
+  await expect(page.getByLabel('Gemini 考据模型',{exact:true})).toBeVisible();
+  await page.getByLabel('Gemini 考据模型',{exact:true}).selectOption({label:'管理端测试 · gemini-search'});
   await page.getByLabel('文字模型',{exact:true}).selectOption({label:'管理端测试 · gemini-search'});
   await page.getByLabel('主题方向').fill('有限资源穿越');await page.getByRole('button',{name:'AI 生成主题',exact:true}).click();
   await expect(page.locator('.idea-card')).toHaveCount(4);await page.locator('.idea-card').first().click();

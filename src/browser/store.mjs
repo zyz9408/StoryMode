@@ -53,7 +53,7 @@ export class BrowserStore {
   savePreset(p) { this.put('presets',p.id,p);return p; }
   activePreset(s) { return s.presetEnabled?this.preset(s.presetId):null; }
   create(input) {
-    const s={...input,id:crypto.randomUUID(),title:input.event.slice(0,36),status:'preparing',phase:'setup',setup:null,world:null,outline:[],sources:[],researchNotes:[],decisions:[],pendingDecision:null,draft:null,evaluation:null,progress:'等待解析事件',error:'',offline:true,grounding:'model',researchProfile:'',created:new Date().toISOString()};
+    const s={...input,id:crypto.randomUUID(),title:input.event.slice(0,36),status:'preparing',phase:'setup',setup:null,world:null,outline:[],sources:[],researchNotes:[],decisions:[],pendingDecision:null,draft:null,evaluation:null,progress:'等待解析事件',error:'',offline:input.offline!==false,grounding:input.offline===false?'pending':'model',created:new Date().toISOString()};
     this.saveStory(s);return s;
   }
   saveStory(s) { s.updated=new Date().toISOString();this.put('stories',s.id,s); }

@@ -19,12 +19,12 @@ export const profileSchema = z.object({
   model: z.string().trim().max(160), apiKey: z.string().max(4096).optional(),
   stream: z.boolean().default(true),
   authMode: z.enum(['api', 'management']).default('api'),
-  purpose: z.enum(['text', 'research', 'image']).default('text').transform(v => v === 'research' ? 'text' : v),
+  purpose: z.enum(['text', 'research', 'image']).default('text'),
   imageMode: z.enum(['auto', 'images', 'gemini']).default('auto'),
 });
 export const topicsSchema = z.object({ topics: z.array(z.object({ title: text.max(100), event: text.max(1500), angle: text.max(500) })).min(3).max(6) });
 export const protagonistSchema = z.object({ name: z.string().trim().max(80).default(''), appearance: z.string().trim().max(2000).default(''), personality: z.string().trim().max(2000).default(''), background: z.string().trim().max(3000).default('') });
-export const createSchema = z.object({ name: text.max(80), event: text.max(4000), textProfile: text, imageProfile: z.string().default(''), imageModel: z.string().max(160).default(''), researchProfile: z.string().default(''), offline: z.boolean().default(false), protagonist: protagonistSchema.default(() => ({ name:'', appearance:'', personality:'', background:'' })), autoImages: z.boolean().default(true), presetId:z.string().max(100).default(''), presetEnabled:z.boolean().default(false) });
+export const createSchema = z.object({ name: text.max(80), event: text.max(4000), textProfile: text, imageProfile: z.string().default(''), imageModel: z.string().max(160).default(''), researchProfile: z.string().default(''), offline: z.boolean().default(true), protagonist: protagonistSchema.default(() => ({ name:'', appearance:'', personality:'', background:'' })), autoImages: z.boolean().default(true), presetId:z.string().max(100).default(''), presetEnabled:z.boolean().default(false) });
 export const setupSchema = z.object({
   title: text.max(100), kind: z.enum(['穿越', '历史改写', '其他']), era: text, location: text, identity: text,
   goal: text, resources: text, assumptions: text,

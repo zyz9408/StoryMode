@@ -23,6 +23,30 @@ async function configure(page:any) {
   await expect(page.getByRole('status')).toContainText('已载入 4 个模型');
   await page.getByRole('button',{name:'关闭',exact:true}).click();
 }
+
+test('Gemini 联网检测与开局考据在浏览器存档中保留',async({page})=>{
+  await page.goto('./');await configure(page);
+  await page.getByRole('button',{name:'模型连接'}).click();
+  await page.getByRole('button',{name:'浏览器测试',exact:true}).click();
+  await page.getByRole('button',{name:'检测联网能力'}).click();
+  await expect(page.getByRole('status')).toContainText('联网成功');
+  await page.getByRole('button',{name:'关闭',exact:true}).click();
+  await page.getByRole('button',{name:'开启新的模拟'}).click();
+  await page.getByLabel('你的名字').fill('考据测试');await page.getByLabel('你想模拟什么？').fill('假如关羽没有死');
+  await page.getByLabel('开启联网考据',{exact:true}).check();
+  await page.getByLabel('Gemini 考据模型',{exact:true}).selectOption({label:'浏览器测试 · mock-text'});
+  await page.getByRole('button',{name:'生成开局设定'}).click();
+  await page.getByRole('button',{name:'确认设定，开始推演'}).click();
+  await expect(page.locator('.decision-box .eyebrow')).toContainText('第 3 章',{timeout:30000});
+  await page.reload();
+  await expect(page.locator('.decision-box .eyebrow')).toContainText('第 3 章');
+  const stories=await page.evaluate(async()=>{
+    const dbs=await indexedDB.databases();
+    const db=await new Promise<IDBDatabase>(resolve=>{const r=indexedDB.open(dbs.find(d=>d.name?.startsWith('storymode-pages'))!.name!);r.onsuccess=()=>resolve(r.result);});
+    const rows=await new Promise<any[]>(resolve=>{const r=db.transaction('stories').objectStore('stories').getAll();r.onsuccess=()=>resolve(r.result);});db.close();return rows;
+  });
+  expect(stories[0].offline).toBe(false);expect(stories[0].sources).toHaveLength(1);expect(stories[0].researchNotes).toHaveLength(1);
+});
 test('Pages子路径：预设、浏览器直连、15章完结、生图、刷新、重写、导出、删除',async({page,context})=>{
   const errors:string[]=[],apiRequests:string[]=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(new URL(r.url()).pathname.startsWith('/api/'))apiRequests.push(r.url());});
   await page.goto('./');await expect(page.locator('.browser-notice')).toContainText('浏览器版');await configure(page);

@@ -10,9 +10,11 @@ test('管理密钥只用于管理接口，模型请求使用业务密钥；支�
   const p={baseUrl:mock.baseUrl.replace('/v1','/management.html'),model:'gemini-search',apiKey:'management-test',authMode:'management',searchMode:'auto'};
   const provider=new Provider();assert.equal((await provider.models(p)).length,4);
   const image=await provider.image({...p,model:'gemini-image',imageMode:'auto'},'城门');assert.equal(image.ext,'png');
+  const research=await provider.research(p,'背景考据');assert.equal(research.sources.length,1);
   const management=mock.calls.filter(c=>c.path==='/v0/management/api-keys');assert.equal(management.length,1);assert.equal(management[0].managementKey,'management-test');
   for(const c of mock.calls.filter(c=>c.path!=='/v0/management/api-keys')){assert.equal(c.authorization,'Bearer business-test');assert.equal(c.managementKey,undefined);}
-  assert.ok(mock.calls.every(c=>!c.body.tools&&!c.body.web_search_options));
+  assert.equal(mock.calls.filter(c=>c.body.tools?.[0]?.googleSearch).length,1);
+  assert.ok(mock.calls.every(c=>!c.body.web_search_options));
 });
 test('管理页地址规范化保留代理路径',()=>{
   assert.equal(normalizeBaseUrl('https://example.com/proxy/management.html'),'https://example.com/proxy/v1');

@@ -14,7 +14,7 @@ async function harness(t,options={}) {
   const mock=await startMock(options), store=new Store(':memory:',crypto), engine=new Engine(store,new Provider());
   const profile=await store.saveProfile({name:'测试',baseUrl:mock.baseUrl,model:'mock-text',apiKey:'private-test-key',stream:options.stream!==false,searchMode:'responses'});
   t.after(async()=>{await engine.shutdown();store.close();await mock.close();});
-  const s=store.create({name:'测试玩家',event:options.event||'假如带着100箱佳得乐回到三国',textProfile:profile.id,imageProfile:profile.id,researchProfile:'',offline:!!options.offline});
+  const s=store.create({name:'测试玩家',event:options.event||'假如带着100箱佳得乐回到三国',textProfile:profile.id,imageProfile:profile.id,researchProfile:'',offline:options.offline!==false});
   await engine.start(s.id);
   assert.equal(store.story(s.id).status,'ready');
   const confirmed=store.story(s.id);confirmed.phase='research';confirmed.status='preparing';store.saveStory(confirmed);
@@ -67,10 +67,24 @@ test('整章流式中断保留草稿片段，恢复不拼入损坏片段',async 
   const s=h.store.story(h.id);assert.equal(s.status,'failed');assert.equal(s.draft.parts.length,0);assert.match(s.draft.partial,/临时草稿/);assert.equal(h.store.chapters(h.id).length,0);
   await finish(h);assert.equal(h.store.story(h.id).status,'completed',h.store.story(h.id).error);assert.ok(!h.store.chapters(h.id)[0].body.includes('临时草稿'));
 });
-test('旧联网检查点和非离线标记也不触发搜索，直接完成推演',async t=>{
-  const h=await harness(t,{noSearch:true});let s=h.store.story(h.id);s.offline=false;s.phase='research';h.store.saveStory(s);
+test('关闭联网时旧考据检查点直接继续推演',async t=>{
+  const h=await harness(t,{noSearch:true});let s=h.store.story(h.id);s.offline=true;s.phase='research';h.store.saveStory(s);
   await finish(h);s=h.store.story(h.id);assert.equal(s.status,'completed',s.error);assert.equal(s.grounding,'model');
   assert.ok(h.mock.calls.every(c=>c.path==='/v1/chat/completions'&&!c.body.tools&&!c.body.web_search_options));
+});
+test('联网资料进入正文上下文，暂停恢复不重复搜索',async t=>{
+  const h=await harness(t);const s=h.store.story(h.id);s.offline=false;s.researchProfile=s.textProfile;h.store.saveStory(s);
+  await finish(h);const done=h.store.story(h.id);
+  assert.equal(done.status,'completed',done.error);assert.equal(done.grounding,'verified');assert.equal(done.sources.length,1);
+  assert.equal(h.mock.calls.filter(c=>c.body.tools).length,1);
+  assert.match(h.engine.context(done).research[0].notes,/运输/);
+});
+test('搜索无证据时保留检查点，允许关闭联网继续',async t=>{
+  const h=await harness(t);const s=h.store.story(h.id);s.offline=false;s.researchProfile=s.textProfile;h.store.saveStory(s);
+  h.engine.provider.research=async()=>{throw new Error('未返回有效搜索证据');};
+  await h.engine.start(s.id);const failed=h.store.story(s.id);
+  assert.equal(failed.status,'failed');assert.equal(failed.phase,'research');assert.equal(failed.sources.length,0);
+  failed.offline=true;h.store.saveStory(failed);await finish(h);assert.equal(h.store.story(s.id).status,'completed');
 });
 test('关系、势力与冲突对象规范化，资源数字仍严格校验',()=>{
   const w=worldSchema.parse({...world,relationships:[{from:'关羽',to:'刘备',type:'盟友',details:{trust:90}},'已有关系'],factions:[{name:'蜀汉',status:'稳固',members:['甲','乙']}],conflicts:[{description:'粮食不足'}]});

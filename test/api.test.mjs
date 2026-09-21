@@ -17,7 +17,8 @@ test('HTTP 应用流程：配置、开局编辑、决策去重、导出与插图
   const p=r.json();assert.equal(p.hasKey,true);assert.ok(!r.body.includes('test-sensitive'));
   const beforeSearchTest=mock.calls.length;
   const disabled=await post(`/api/profiles/${p.id}/test`,{kind:'research'});
-  assert.equal(disabled.statusCode,400);assert.match(disabled.json().error,/已关闭/);assert.equal(mock.calls.length,beforeSearchTest);
+  assert.equal(disabled.statusCode,200);assert.match(disabled.json().message,/联网成功/);assert.equal(mock.calls.length,beforeSearchTest+1);
+  const missing=await post('/api/stories',{name:'玩家',event:'测试',textProfile:p.id,offline:false});assert.equal(missing.statusCode,400);
   assert.ok(!(await app.inject('/api/profiles')).body.includes('test-sensitive'));
   r=await post(`/api/profiles/${p.id}/models`,{});assert.equal(r.json().models.length,2);
   r=await post('/api/stories',{name:'玩家',event:'假如带着100箱佳得乐回到三国',textProfile:p.id,imageProfile:p.id});const id=r.json().id;

@@ -1,6 +1,15 @@
 # 异史 · 故事模拟器
 
-一个支持本机服务和纯浏览器运行的中文互动小说模拟器。填写角色名字和一个「假如」，先确认开局条件，再由 OpenAI 兼容模型直接推演和写作；应用不主动发起联网搜索。故事按因果自然收束，**无最低章数、最多 30 章**，每章 **3000～8000 个非空白、非标点文字字符**，关键节点由玩家决定，结局后给出有章节依据的评价。
+一个支持本机服务和纯浏览器运行的中文互动小说模拟器。填写角色名字和一个「假如」，先确认开局条件，再由 OpenAI 兼容模型推演和写作；可选 Gemini 原生联网考据。故事按因果自然收束，**无最低章数、最多 30 章**，每章 **3000～8000 个非空白、非标点文字字符**，关键节点由玩家决定，结局后给出有章节依据的评价。
+
+## 联网考据（默认关闭）
+
+1. 在「模型连接」新增或选择 Gemini 配置：CPAMC Base URL 可用 `https://mofi1994.top/v1`，模型例如 `gemini-3-flash`。沿用业务 API Key；也支持原有管理密钥换取业务凭证方式。
+2. 点击「检测联网能力」，返回真实搜索词及有效网页来源才算通过。检测会调用一次模型。
+3. 新建模拟时勾选「开启联网考据」，选择「Gemini 考据模型」。确认开局后搜索一次背景，保存笔记及来源供正文使用；正文和生图仍使用各自配置。
+4. 已有模拟先暂停，再在「本次模拟的模型」修改开关。尚无考据资料时，下次继续推演会搜索；已有资料不会重复搜索或重写已完成章节。
+
+搜索使用 `/v1beta/models/{model}:generateContent` 和 `tools: [{googleSearch:{}}]`，不依赖 Responses `web_search`。无搜索证据或网络失败会保留检查点并提示重试，也可关闭开关后继续。资料来源在故事的资料面板显示，不能把反事实推演视为已证实史实。纯浏览器模式还要求该原生接口支持 CORS。
 
 ## 在线使用（GitHub Pages）
 
@@ -68,11 +77,11 @@ npm start
 
 新建模拟中点击「AI 生成主题」，可填写方向（例如三国、普通人穿越、有限物资、科技变革），也可留空。使用当前选中的文字模型生成 3～6 个完整模拟事件及现实约束；点击卡片填入事件，再编辑或创建模拟。「换一批主题」会把上一批内容作为去重参考。主题推荐不会自动开始长篇写作，也不伪称已经完成考据。
 
-### 模型直接推演（已关闭主动搜索）
+### 正文与搜索分离
 
-应用不再发起独立搜索、不传递 `web_search` / `web_search_options` / `googleSearch` 参数，不执行开局搜索、逐章补充搜索或联网检测。相关设置、模型选择与检测按钮已移除。Gemini 是否在内部检索由所用服务和模型决定，应用不再强制检查搜索证据，也不宣称一定检索成功。
+正文仍使用普通 Chat Completions，不注入搜索工具。只有主动点击联网检测或为模拟开启联网考据时，才通过 Gemini 原生接口传递 `googleSearch`；不逐章自动搜索，不把工具列表回显或普通文本当成搜索证据。
 
-旧存档的搜索阶段会自动跳过，历史资料和来源保留但不再新增；因关系或势力字段格式失败的记录会转为可继续状态，点击「继续推演」即可重试。关闭主动搜索不影响模型列表、AI 主题、文字写作或生图等必要 API 调用。
+旧存档沿用其已保存的开关。关闭联网时跳过搜索阶段；开启时保留搜索检查点、资料及来源，搜索失败不会静默降级。关闭联网不影响模型列表、AI 主题、文字写作或生图等必要 API 调用。
 
 生图支持 OpenAI Images 和 Gemini 原生 `generateContent` 的 `responseModalities: ["TEXT", "IMAGE"]`，自动模式为 Gemini 模型选择原生生图。后者读取 `inlineData` 图片，实际尺寸由模型决定；其他模型使用 Images 请求 1024×1024。
 
@@ -158,7 +167,7 @@ python -m unittest discover -s test -p test_launcher.py
 | --- | --- |
 | `GET/POST /api/profiles` | 列出脱敏配置 / 保存配置 |
 | `POST /api/profiles/:id/models` | 读取供应商模型列表 |
-| `POST /api/profiles/:id/test` | `{kind: "text"}` 文字连接检测；旧 research 请求直接报搜索已关闭 |
+| `POST /api/profiles/:id/test` | `{kind: "text"}` 文字检测；`{kind: "research"}` Gemini 原生搜索证据检测 |
 | `GET /api/presets` | 本地预设库 |
 | `POST /api/presets/import` | `{source, filename}` 导入 JSON 文本 |
 | `POST /api/presets/:id` | 保存条目开关、内容、顺序和采样选项 |
@@ -171,7 +180,7 @@ python -m unittest discover -s test -p test_launcher.py
 | `POST /api/stories/:id/confirm` | 确认编辑后的开局 |
 | `POST /api/stories/:id/pause`、`resume` | 暂停 / 恢复 |
 | `POST /api/stories/:id/config` | 空闲时更换模型绑定 |
-| `POST /api/stories/:id/offline` | 旧版本兼容入口；当前应用始终不主动搜索 |
+| `POST /api/stories/:id/offline` | `{confirm: true}` 关闭主动联网；保留已有资料 |
 | `POST /api/stories/:id/decision` | `{chapter, choice}` 提交当前决策 |
 | `POST /api/stories/:id/protagonist` | `{name, appearance, personality, background, generatePortrait?}` 保存主角，按需排队立绘 |
 | `POST /api/stories/:id/portrait` | `{prompt?, model?}` 排队生成或重试立绘 |

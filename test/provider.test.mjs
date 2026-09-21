@@ -10,10 +10,19 @@ test('模型列表、文字连接与生图 Base64',async t=>{
   assert.equal(await provider.text(p,'连接测试',{}),'连接成功');
   const image=await provider.image(p,'场景');assert.equal(image.ext,'png');assert.ok(image.bytes.length);
 });
-test('所有旧联网适配入口都在发出网络请求前拒绝',async()=>{
-  let calls=0;const p=new Provider(async()=>{calls++;throw new Error('不应发出请求');});
-  for(const searchMode of ['auto','gemini','chat','responses']) await assert.rejects(p.research({...profile,searchMode},'搜索'),/已关闭/);
-  assert.equal(calls,0);
+test('Gemini 原生联网返回可核实来源，忽略旧搜索协议配置',async t=>{
+  const mock=await startMock();t.after(mock.close);
+  const result=await new Provider().research({...profile,baseUrl:mock.baseUrl,model:'gemini-search'},'古代运输');
+  assert.equal(result.sources[0].url,'https://example.com/source');
+  assert.equal(result.evidence,'gemini-grounding');assert.match(result.notes,/运输/);
+  assert.equal(mock.calls[0].path,'/v1beta/models/gemini-search:generateContent');
+  assert.deepEqual(mock.calls[0].body.tools,[{googleSearch:{}}]);
+});
+test('普通文本、危险来源和缺失搜索词不能冒充联网成功',async()=>{
+  for(const groundingMetadata of [undefined,{webSearchQueries:['q'],groundingChunks:[{web:{uri:'javascript:alert(1)'}}]},{groundingChunks:[{web:{uri:'https://example.com'}}]}]) {
+    const p=new Provider(async()=>Response.json({candidates:[{content:{parts:[{text:'看似搜索结果'}]},groundingMetadata}]}));
+    await assert.rejects(p.research(profile,'查询'),/未返回有效搜索证据/);
+  }
 });
 for(const status of [401,403,404,429,500])test(`HTTP ${status} 显示可恢复错误且不泄露上游响应`,async t=>{
   const mock=await startMock({status});t.after(mock.close);

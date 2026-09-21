@@ -20,10 +20,9 @@ export class Store {
       if (['pending','running'].includes(job.status)) { job.status = 'paused'; job.error = '服务已重启，可重试插图'; this.saveIllustration(job); }
     }
     for (const story of this.listStories(true)) {
-      story.offline = true; story.grounding = 'model'; story.researchProfile = '';
+      story.offline ??= true; story.grounding ??= 'model'; story.researchProfile ??= '';
       story.protagonist ??= { name:'', appearance:'', personality:'', background:'' }; story.autoImages ??= true;
       story.presetId ??= ''; story.presetEnabled ??= false;
-      if (story.phase === 'research') story.phase = 'outline';
       if (story.status === 'failed' && /(?:(?:world\.(?:relationships|factions|conflicts)|scenes|issues|decision\.options)\.\d+ Invalid input: expected string, received (?:object|array)|world\.(?:relationships|factions|conflicts) Invalid input: expected array, received undefined)/.test(story.error || '')) {
         story.status = 'paused'; story.error = ''; story.progress = '描述列表格式兼容已修复，可从原检查点继续推演';
       }
@@ -34,8 +33,6 @@ export class Store {
     }
     for (const row of this.db.prepare('SELECT id,data FROM profiles').all()) {
       const p = JSON.parse(row.data); delete p.searchMode;
-      if (p.purpose === 'research') p.purpose = 'text';
-      if (p.name === 'Mofi · 联网考据') p.name = 'Mofi · 备用文字';
       this.db.prepare('UPDATE profiles SET data=? WHERE id=?').run(JSON.stringify(p), row.id);
     }
   }
@@ -60,7 +57,7 @@ export class Store {
   }
   create(input) {
     const s = { ...input, id: randomUUID(), title: input.event.slice(0, 36), status: 'preparing', phase: 'setup', setup: null, world: null, outline: [], sources: [], researchNotes: [], decisions: [], pendingDecision: null, draft: null, evaluation: null, progress: '等待解析事件', error: '', grounding: input.offline ? 'offline' : 'pending', created: new Date().toISOString() };
-    s.offline = true; s.grounding = 'model'; s.researchProfile = '';
+    s.offline = input.offline !== false; s.grounding = s.offline ? 'model' : 'pending';
     this.saveStory(s); return s;
   }
   saveStory(story) {

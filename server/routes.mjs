@@ -11,7 +11,8 @@ export function registerRoutes(app, { store, engine, provider, imagery, storyLoc
   const profilesExist = s => {
     const ids = new Set(store.profiles().map(p => p.id));
     if (s.presetId && !store.preset(s.presetId)) throw new Error('选择的预设不存在');
-    if (![s.textProfile, s.imageProfile].filter(Boolean).every(id => ids.has(id))) throw new Error('选择的模型配置不存在');
+    if (s.offline === false && !s.researchProfile) throw new Error('开启联网考据时请选择 Gemini 考据模型');
+    if (![s.textProfile, s.imageProfile, ...(s.offline === false ? [s.researchProfile] : [])].filter(Boolean).every(id => ids.has(id))) throw new Error('选择的模型配置不存在');
   };
   app.get('/api/health', async () => ({ ok: true, app: 'storymode', pid: runtimePid }));
   app.get('/api/profiles', async () => store.profiles());
@@ -21,7 +22,8 @@ export function registerRoutes(app, { store, engine, provider, imagery, storyLoc
     const { kind } = z.object({ kind: z.enum(['text', 'research']).default('text') }).parse(req.body || {});
     const p = await store.profile(req.params.id);
     if (kind === 'research') {
-      throw new Error('应用联网搜索及检测已关闭，请使用文字连接测试');
+      const result = await provider.research(p, '搜索并核实 Python 官方下载页面的信息，注明来源');
+      return { ok: true, message: `联网成功，已验证 ${result.sources.length} 个来源`, sources: result.sources };
     }
     await provider.text(p, '连接测试，请仅回答连接成功。', {});
     return { ok: true, message: '文字模型连接成功' };
@@ -64,7 +66,7 @@ export function registerRoutes(app, { store, engine, provider, imagery, storyLoc
   app.post('/api/stories/:id/confirm', async req => {
     const s = get(req.params.id); idle(s.id);
     if (s.phase !== 'confirm') throw new Error('当前模拟不能修改开局');
-    s.setup = setupSchema.parse(req.body); s.title = s.setup.title; s.phase = 'outline'; s.status = 'preparing'; store.saveStory(s); launch(s.id); return { ok: true };
+    s.setup = setupSchema.parse(req.body); s.title = s.setup.title; s.phase = s.offline ? 'outline' : 'research'; s.status = 'preparing'; store.saveStory(s); launch(s.id); return { ok: true };
   });
   app.post('/api/stories/:id/pause', async req => { get(req.params.id); await engine.pause(req.params.id); return { ok: true }; });
   app.post('/api/stories/:id/resume', async req => {
@@ -76,7 +78,7 @@ export function registerRoutes(app, { store, engine, provider, imagery, storyLoc
   });
   app.post('/api/stories/:id/config', async req => {
     const s = get(req.params.id); idle(s.id);
-    const config = z.object({ textProfile: text, researchProfile: z.string().default(''), imageProfile: z.string(), imageModel: z.string().max(160).default(''), autoImages: z.boolean().default(true) }).parse(req.body);
+    const config = z.object({ textProfile: text, researchProfile: z.string().default(s.researchProfile || ''), offline: z.boolean().default(s.offline !== false), imageProfile: z.string(), imageModel: z.string().max(160).default(''), autoImages: z.boolean().default(true) }).parse(req.body);
     profilesExist(config); storyLocks.add(s.id);
     try {
       await imagery.pause(s.id);
