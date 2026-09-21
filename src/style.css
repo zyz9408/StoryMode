@@ -17,3 +17,11 @@
 
 .browser-notice{margin:16px 24px 0;line-height:1.7;font-size:13px;}
 @media(max-width:600px){.browser-notice{margin:12px 14px 0;}}
+
+.sidebar-toggle{position:fixed;left:8px;top:5px;z-index:30;width:30px;height:28px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:5px;background:var(--paper);color:var(--text);box-shadow:0 2px 6px #0000000a}
+.sidebar-toggle:hover{background:var(--hover)}
+.app-shell.sidebar-collapsed>.sidebar{display:none}
+.app-shell.sidebar-collapsed>main{margin-left:0;width:100%}
+.sidebar-collapsed .topbar{padding-left:52px}
+.sidebar-collapsed .browser-notice{padding-left:30px}
+@media(max-width:600px){.sidebar-toggle{top:auto;bottom:16px;left:12px;width:40px;height:40px}.sidebar-collapsed .topbar{padding-left:20px}.sidebar-collapsed .browser-notice{padding-left:16px}}

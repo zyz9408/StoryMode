@@ -155,6 +155,8 @@ function App() {
   const [rewriteInstruction,setRewriteInstruction]=useState(''),[deleteTarget,setDeleteTarget]=useState<Book|null>(null);
   const [error,setError]=useState(''),[busy,setBusy]=useState(false),[panel,setPanel]=useState<'sources'|'world'|'decisions'|null>(null);
   const [choice,setChoice]=useState(''),[live,setLive]=useState(''),[online,setOnline]=useState(true);
+  const [sidebarCollapsed,setSidebarCollapsed]=useState(()=>localStorage.getItem('storymode-sidebar-collapsed')==='true');
+  useEffect(()=>localStorage.setItem('storymode-sidebar-collapsed',String(sidebarCollapsed)),[sidebarCollapsed]);
   const [dark,setDark]=useState(()=>localStorage.getItem('storymode-dark')==='true');
   const [font,setFont]=useState(()=>Number(localStorage.getItem('storymode-font'))||19);
   const close=useCallback(()=>setModal(null),[]);
@@ -182,8 +184,9 @@ function App() {
   const targetChapter=story?.chapters.find(c=>c.number===chapterTarget);
   const removeBook=async()=>{if(!deleteTarget)return;setBusy(true);setError('');try{const result=await api<{remainingImages:number}>(`/stories/${deleteTarget.id}/delete`,{confirm:true});if(active===deleteTarget.id)open(null);setDeleteTarget(null);await refreshBooks();if(result.remainingImages)setError('故事已删除，部分插图文件被占用，未能清理。');}catch(e){setError((e as Error).message);}finally{setBusy(false);}};
   const selectChapter=(number:number)=>{setSelected(number);setReadingChapter(number);requestAnimationFrame(()=>document.querySelector('.reading-page')?.scrollIntoView({block:'start'}));};
-  return <div className="app-shell">
-    <aside className="sidebar"><button className="brand" onClick={()=>open(null)}><span className="brand-mark">异</span><span>异史<small>STORYMODE</small></span></button><button className="new-button" onClick={()=>setModal('new')}><Icon name="plus" size={18}/>开启新的模拟</button>
+  return <div className={'app-shell'+(sidebarCollapsed?' sidebar-collapsed':'')}>
+    <button className="sidebar-toggle" aria-label={sidebarCollapsed?'展开左侧栏':'收起左侧栏'} title={sidebarCollapsed?'展开左侧栏':'收起左侧栏'} aria-expanded={!sidebarCollapsed} aria-controls="workspace-sidebar" onClick={()=>setSidebarCollapsed(value=>!value)}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>{sidebarCollapsed?<path d="m13 9 3 3-3 3"/>:<path d="m16 9-3 3 3 3"/>}</svg></button>
+    <aside id="workspace-sidebar" className="sidebar" aria-hidden={sidebarCollapsed}><button className="brand" onClick={()=>open(null)}><span className="brand-mark">异</span><span>异史<small>STORYMODE</small></span></button><button className="new-button" onClick={()=>setModal('new')}><Icon name="plus" size={18}/>开启新的模拟</button>
       <div className="nav-label">你的故事</div><button className={'nav-item '+(!active?'active':'')} onClick={()=>open(null)}><Icon name="book"/>模拟书架<span>{books.length.toString().padStart(2,'0')}</span></button>
       <div className="sidebar-books">{books.slice(0,12).map(b=><button className={active===b.id?'selected':''} key={b.id} onClick={()=>open(b.id)}><span className={'tiny-dot '+b.status}/><span>{b.title}<small>{statuses[b.status]} · {b.count} 章</small></span></button>)}</div>
       <div className="sidebar-bottom"><div className="local-note"><span className="online-dot"/>本地工作空间<small>故事与密钥，留在你的设备上</small></div><button className="nav-item" aria-label="写作预设" onClick={()=>setModal('presets')}><Icon name="book"/>写作预设<span>{presets.length}</span></button><button className="nav-item" onClick={()=>setModal('settings')}><Icon name="settings"/>模型连接<span>{profiles.length}</span></button><div className="sidebar-footer">每一种选择，都有回响。<span>V 1.0</span></div></div>

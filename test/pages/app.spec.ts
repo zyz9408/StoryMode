@@ -1,5 +1,20 @@
 import { test, expect } from '@playwright/test';
 
+test('左侧栏可收起展开、刷新记忆，并在手机上保留恢复入口',async({page})=>{
+  await page.goto('./');
+  const before=await page.locator('main').boundingBox();
+  await page.getByRole('button',{name:'收起左侧栏',exact:true}).click();
+  await expect(page.locator('#workspace-sidebar')).toBeHidden();
+  const after=await page.locator('main').boundingBox();expect(after!.width-before!.width).toBeGreaterThan(150);
+  await page.reload();await expect(page.locator('#workspace-sidebar')).toBeHidden();
+  const toggle=page.getByRole('button',{name:'展开左侧栏',exact:true});await expect(toggle).toHaveAttribute('aria-expanded','false');
+  await toggle.focus();await page.keyboard.press('Enter');await expect(page.locator('#workspace-sidebar')).toBeVisible();
+  await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:'收起左侧栏',exact:true}).click();
+  await page.evaluate(()=>window.scrollTo(0,document.body.scrollHeight));await expect(page.getByRole('button',{name:'展开左侧栏',exact:true})).toBeInViewport();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+  await page.getByRole('button',{name:'展开左侧栏',exact:true}).click();await expect(page.locator('#workspace-sidebar')).toBeVisible();
+});
+
 async function configure(page:any) {
   await page.getByRole('button',{name:'模型连接'}).click();
   await page.getByLabel('配置名称').fill('浏览器测试');await page.getByLabel('Base URL').fill('http://127.0.0.1:3213/v1');
