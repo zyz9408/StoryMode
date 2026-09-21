@@ -9,7 +9,10 @@ export const endingLabels = {
   posterity:'同时代及后人的评价',
 };
 const keys=Object.keys(endingLabels);
-const selectionSchema=z.object({selections:z.object(Object.fromEntries(keys.map(key=>[key,z.array(z.number().int().positive()).max(12).default([])])))});
+// Several supporting characters can legitimately need more than twelve passages.
+// Validate IDs against the actual body below instead of imposing a quote quota.
+const passageId=z.preprocess(value=>typeof value==='string'&&/^\d+$/.test(value.trim())?Number(value):value,z.number().int().positive());
+const selectionSchema=z.object({selections:z.object(Object.fromEntries(keys.map(key=>[key,z.array(passageId).default([]).transform(ids=>[...new Set(ids)].sort((a,b)=>a-b))])))});
 export function missingEndingKeys(body,review) {
   if(!review.finished)return [];
   return keys.filter(key=>{const quote=review.ending?.[key]?.trim();return !quote||quote.length<8||!body.includes(quote);});
@@ -42,7 +45,8 @@ export async function recoverEndingEvidence(provider,profile,body,review,signal)
     if(ending[key]?.trim().length>=8 && body.includes(ending[key].trim()))continue;
     const ids=result.selections[key];
     if(!ids.length || ids.some(id=>id>passages.length))continue;
-    const first=passages[Math.min(...ids)-1],last=passages[Math.max(...ids)-1];
+    const sorted=[...new Set(ids)].sort((a,b)=>a-b);
+    const first=passages[sorted[0]-1],last=passages[sorted.at(-1)-1];
     const quote=body.slice(first.start,last.end).trim();
     if(quote.length>=8)ending[key]=quote;
   }

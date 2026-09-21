@@ -12,6 +12,25 @@ test('引用被改写时按段号恢复正文原句，保留原有正确依据',
   assert.deepEqual(endingIssues(body,fixed),[]);assert.equal(fixed.ending.protagonistDeath,endingEvidence.protagonistDeath);
   assert.equal(review.ending.keyPeopleFates,'人物都各有归宿。');
 });
+
+test('超过12个证据段号通过真实结构解析，去重排序且兼容数字字符串',async()=>{
+  const body=Array.from({length:30},(_,i)=>`人物${i+1}最终归乡，晚年病逝。`).join('\n');
+  const provider={json:async(p,t,c,schema)=>{
+    const parsed=schema.parse({selections:{keyPeopleFates:[...c.passages.map(p=>String(p.id)).reverse(),1,1,30]}});
+    assert.deepEqual(parsed.selections.keyPeopleFates,Array.from({length:30},(_,i)=>i+1));
+    return parsed;
+  }};
+  const result=await recoverEndingEvidence(provider,{},body,{finished:true,ending:null});
+  assert.equal(result.ending.keyPeopleFates,body);
+  assert.equal(endingIssues(body,result).length,4);
+});
+
+test('较长引用列表中的越界段号仍不能当作有效证据',async()=>{
+  const body=Array.from({length:20},(_,i)=>`人物${i+1}最终归乡，晚年病逝。`).join('\n');
+  const provider={json:async(p,t,c,schema)=>schema.parse({selections:{keyPeopleFates:[...c.passages.map(p=>p.id),999]}})};
+  const result=await recoverEndingEvidence(provider,{},body,{finished:true,ending:null});
+  assert.equal(result.ending.keyPeopleFates,undefined);
+});
 test('正文缺失或引用段号越界不能通过，未完结和正确依据不增加调用',async()=>{
   const body='此战大获全胜，他们准备在明年继续征伐。';
   const provider={json:async()=>({selections:{keyPeopleFates:[999],eraClosure:[],protagonistDeath:[],organizationFates:[],posterity:[]}})};
