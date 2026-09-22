@@ -14,6 +14,7 @@ export function registerRegexUiTest() {
     await editor.getByLabel('脚本名称').nth(1).fill('手动规则');
     await editor.getByLabel('查找表达式',{exact:true}).nth(1).fill('/测试/g');
     await editor.getByLabel('替换内容',{exact:true}).nth(1).fill('替换结果');
+    await page.getByLabel('最大输出 tokens（留空使用供应商默认值）',{exact:true}).fill('8192');
     await page.getByRole('button',{name:'保存预设',exact:true}).click();
     await expect(page.getByRole('status')).toContainText('已保存');
     await page.reload();
@@ -21,6 +22,7 @@ export function registerRegexUiTest() {
     await page.getByLabel('管理预设',{exact:true}).selectOption({label:'正则测试'});
     await expect(editor.getByLabel('脚本名称').nth(1)).toHaveValue('手动规则');
     await expect(editor.getByLabel('替换内容',{exact:true}).nth(1)).toHaveValue('替换结果');
+    await expect(page.getByLabel('最大输出 tokens（留空使用供应商默认值）',{exact:true})).toHaveValue('8192');
     await page.getByLabel('导入正则 JSON',{exact:true}).setInputFiles(file('其他预设.json',{prompts:[{identifier:'notImported',content:'不要导入该提示词'}],extensions:{extensions:{regex_scripts:[{...embedded,scriptName:'提取的规则'}]}}}));
     await expect(page.getByRole('status')).toContainText('已读取并保存 1 条正则');
     await expect(editor.getByLabel('脚本名称')).toHaveCount(3);

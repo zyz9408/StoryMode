@@ -102,6 +102,8 @@ npm start
 
 **添加正则**：打开「写作预设」，选择预设，在「正则脚本」点击「添加正则」，填写查找表达式（例如 `/旧词/g`）和替换内容，然后「保存预设」。可调整顺序、开关和应用范围，并单独导出正则 JSON。导入完整预设时自动读取内嵌正则并显示条数；「导入正则 JSON」也接受完整预设文件，只提取正则到当前预设，不改变提示词。兼容 `extensions.regex_scripts`、顶层 `regex_scripts` / `regexScripts` 及旧嵌套 `extensions.extensions.regex_scripts`。已保存的旧格式数据在读取时自动适配；手动清空的正则列表不会从旧扩展元数据中重新恢复。
 
+**DeepSeek / HTTP 422**：负数 `seed` 是酒馆的随机种子哨兵值，发送时省略。连接 `api.deepseek.com` 或使用 `deepseek-chat` / `deepseek-reasoner` / `deepseek-flash` / `deepseek-vN` 名称的兼容接口时，不发送 DeepSeek 未声明的 `seed`、`top_k`、`top_a`、`min_p`、`repetition_penalty`、`verbosity`；OpenRouter 保留其扩展采样参数。只适配请求，不删除预设原值或正则。预览显示过滤说明。400/422 错误展示经脱敏、限长的字段诊断，不再只有状态码，也不会自动修改参数并重试。可在预设编辑器修改「最大输出 tokens」或清空以采用供应商默认值；不同模型和中转服务的限制以其错误说明为准，不统一把所有 DeepSeek 模型强制限为 8192。参考 [DeepSeek Chat Completions 文档](https://api-docs.deepseek.com/api/create-chat-completion/)。
+
 - `system`、`user`、`assistant` 条目直接成为请求里的消息，不再嵌入 `creativePreset`。保留编排开关、深度、优先级、触发类型及禁止覆盖设置；同深度的优先级和角色分组按参考版本处理。
 - 导入后选择预设并启用。预设用于正文，以及携带故事预设的 JSON 任务；JSON 任务使用 `quiet` 触发类型，并在末尾添加结构化输出控制消息。连接测试、主题推荐、生图和独立联网接口不携带故事预设。
 - 角色、性格、情景、世界信息和历史占位由 StoryMode 上下文填充。已有章节作为 assistant 历史，玩家决策作为 user 历史。当前任务作为 user 消息；没有启用 `chatHistory` 的简化预设会在末尾附加历史及任务，预览会提示这个适配行为。
