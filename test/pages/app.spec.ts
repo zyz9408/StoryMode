@@ -49,7 +49,7 @@ test('Gemini 联网检测与开局考据在浏览器存档中保留',async({page
 });
 test('Pages子路径：预设、浏览器直连、15章完结、生图、刷新、重写、导出、删除',async({page,context})=>{
   const errors:string[]=[],apiRequests:string[]=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(new URL(r.url()).pathname.startsWith('/api/'))apiRequests.push(r.url());});
-  await page.goto('./');await expect(page.locator('.browser-notice')).toContainText('浏览器版');await configure(page);
+  await page.goto('./');await expect(page.locator('.browser-notice')).toHaveCount(0);await configure(page);
   await page.getByRole('button',{name:'写作预设',exact:true}).click();
   await page.getByLabel('导入预设 JSON').setInputFiles({name:'Pages.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({prompts:[{identifier:'style',name:'紧凑',content:'动作推进叙事',enabled:true}]}))});
   await expect(page.getByRole('status')).toContainText('已导入');await page.getByRole('button',{name:'保存并预览'}).click();await expect(page.locator('.preset-preview')).toContainText('将作为创作偏好发送');await page.getByRole('button',{name:'关闭',exact:true}).click();
