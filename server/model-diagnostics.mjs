@@ -8,8 +8,8 @@ export function modelDiagnostics(profile, task, context, attempts, secrets=[]) {
   const clip=value=>{const text=redact(value);return text.length<=limit?text:text.slice(0,limit/2)+'\n…〔中间内容因长度限制省略〕…\n'+text.slice(-limit/2);};
   return {
     kind:'model_json',created:new Date().toISOString(),model:redact(profile.model),task:clip(task),
-    presetName:redact(context.preset?.name || '未启用预设'),
-    outputRegexNames:(context.preset?.regexScripts || []).filter(s=>!s.disabled&&!s.markdownOnly&&!s.promptOnly&&s.placement.includes(2)).map(s=>redact(s.scriptName)),
+    presetName:redact(context.preset?.name || '未启用预设'),presetApplied:false,
+    outputRegexNames:[],
     attempts:attempts.map(a=>({number:a.number,reason:clip(a.reason),finishReason:redact(a.finishReason || '未提供'),
       response:clip(a.response),responseLength:a.response.length,truncated:a.response.length>limit,
       regexChanged:a.originalResponse!==a.response,

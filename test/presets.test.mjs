@@ -39,7 +39,7 @@ test('格式错误与重复标识拒绝，编辑后导出可再次导入',()=>{
   const p=importPreset(source,'样例');p.entries[0].enabled=false;
   const imported=importPreset(JSON.stringify(p));assert.notEqual(imported.id,p.id);assert.equal(imported.entries[0].enabled,false);
 });
-test('实际模型请求保留预设角色、顺序及输出参数，结构化任务使用 quiet 生成',async t=>{
+test('正文保留预设角色、顺序及参数，结构化任务不携带写作预设',async t=>{
   const mock=await startMock();t.after(mock.close);const provider=new Provider(),preset=importPreset(source);
   preset.useParameters=true;
   const profile={baseUrl:mock.baseUrl,model:'mock-text',stream:false,apiKey:''};
@@ -48,7 +48,7 @@ test('实际模型请求保留预设角色、顺序及输出参数，结构化�
   assert.equal(body.temperature,1.08);assert.equal(body.max_tokens,10);assert.equal(body.web_search_options,undefined);assert.equal(body.tools,undefined);
   assert.equal(input.creativePreset,undefined);assert.equal(input.context.preset,undefined);assert.deepEqual(body.messages.at(-1),{role:'assistant',content:'助手参考文本'});
   await provider.text(profile,'审核',{preset},{json:true});body=mock.calls.at(-1).body;
-  assert.equal(body.temperature,1.08);assert.match(body.messages.at(-1).content,/JSON 对象/);assert.equal(body.messages.at(-1).role,'system');
+  assert.equal(body.temperature,undefined);assert.equal(body.max_tokens,undefined);assert.match(body.messages[0].content,/JSON 对象/);assert.deepEqual(body.messages.map(m=>m.role),['system','user']);assert.ok(!JSON.stringify(body).includes('助手参考文本'));
   await provider.text(profile,'写完整一章',{preset:null});assert.equal(JSON.parse(mock.calls.at(-1).body.messages.at(-1).content).creativePreset,undefined);
 });
 test('预设API导入、编辑、预览、故事启停、导出与SQLite重启持久化',async t=>{
@@ -64,6 +64,7 @@ test('预设API导入、编辑、预览、故事启停、导出与SQLite重启�
   const preview=await post(`/api/presets/${p.id}/preview`,{storyId:s.id});assert.equal(preview.statusCode,200);assert.match(preview.json().messages[0].content,/角色/);
   p.entries[0].enabled=false;assert.equal((await post(`/api/presets/${p.id}`,p)).statusCode,200);
   const savedPreview=(await post(`/api/presets/${p.id}/preview`,{})).json();assert.equal(savedPreview.messages.at(-1).role,'assistant');assert.ok(!savedPreview.messages.some(m=>m.content.includes('写紧凑的叙事')));assert.deepEqual(savedPreview.request.messages,savedPreview.messages);
+  const structuredPreview=await post(`/api/presets/${p.id}/preview`,{json:true,task:'返回 JSON 大纲'});assert.equal(structuredPreview.statusCode,200);assert.deepEqual(structuredPreview.json().messages.map(m=>m.role),['system','user']);assert.match(structuredPreview.json().warnings.join(''),/不应用写作预设/);
   await post(`/api/stories/${s.id}/preset`,{presetId:p.id,presetEnabled:false});assert.equal(store.activePreset(store.story(s.id)),null);
   const exported=await app.inject(`/api/presets/${p.id}/export`);assert.equal(exported.statusCode,200);assert.equal(JSON.parse(exported.body).entries[0].enabled,false);
   assert.deepEqual(JSON.parse(exported.body).prompt_order.at(-1).order[0],{identifier:'style',enabled:false});

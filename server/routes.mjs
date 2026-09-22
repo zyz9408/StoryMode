@@ -46,7 +46,7 @@ export function registerRoutes(app, { store, engine, provider, imagery, storyLoc
     const context = storyId ? structuredClone(engine.context(get(storyId))) : {player:'玩家',protagonist:{name:'主角'},event:'示例模拟事件'};
     const profile = storyId && get(storyId).textProfile ? await store.profile(get(storyId).textProfile) : {model:'预览模型',stream:true};
     const {resolved,body} = prepareTextRequest(profile,task,{...context,preset},{json});
-    const {transformOutput,macroState,...preview} = resolved;
+    const {transformOutput,macroState,...preview} = resolved || {items:[],characters:body.messages.reduce((sum,m)=>sum+m.content.length,0),unknownMacros:[],parameters:{},warnings:['结构化 JSON 任务使用独立提示词，不应用写作预设、预设采样参数或正则。']};
     return {...preview,messages:body.messages,request:body};
   });
   app.post('/api/presets/:id/regex/import', {bodyLimit:Number.MAX_SAFE_INTEGER}, async req=>{

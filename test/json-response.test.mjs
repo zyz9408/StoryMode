@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {z} from 'zod';
 import {decodeModelJson} from '../server/json-response.mjs';
-import {Provider} from '../server/provider.mjs';
+import {Provider,prepareTextRequest} from '../server/provider.mjs';
 import {importPreset} from '../server/presets.mjs';
 import {Store} from '../server/store.mjs';
 import {Engine} from '../server/engine.mjs';
@@ -48,12 +48,29 @@ test('两次失败保留任务、原因、模型响应和结束标记，并脱�
     assert.equal(e.details.attempts[1].finishReason,'stop');assert.ok(!JSON.stringify(e.details).includes('private-secret'));return true;
   });assert.equal(count,2);
 });
-test('输出正则破坏 JSON 时保留处理前后内容，显示规则名称',async()=>{
+test('输出正则不能再修改 JSON 响应，仍用于正文，诊断标明预设未应用',async()=>{
   const preset=importPreset({name:'test-preset',prompts:[{identifier:'main',content:'test'}],extensions:{regex_scripts:[{scriptName:'移除括号',findRegex:'/[{}]/g',replaceString:'',placement:[2]}]}});
-  await assert.rejects(new Provider(async()=>response('{"text":"valid"}')).json(profile,'task',{preset},schema),e=>{
-    assert.deepEqual(e.details.outputRegexNames,['移除括号']);assert.equal(e.details.presetName,'test-preset');
-    assert.equal(e.details.attempts[0].originalResponse,'{"text":"valid"}');assert.equal(e.details.attempts[0].response,'"text":"valid"');assert.equal(e.details.attempts[0].regexChanged,true);return true;
+  const provider=new Provider(async()=>response('{"text":"valid"}'));
+  assert.deepEqual(await provider.json(profile,'task',{preset},schema),{text:'valid'});
+  assert.equal(await provider.text(profile,'task',{preset}),'"text":"valid"');
+  await assert.rejects(new Provider(async()=>response('bad')).json(profile,'task',{preset},schema),e=>{
+    assert.deepEqual(e.details.outputRegexNames,[]);assert.equal(e.details.presetName,'test-preset');assert.equal(e.details.presetApplied,false);assert.equal(e.details.attempts[0].regexChanged,false);return true;
   });
+});
+
+test('结构化任务及修复请求隔离预设、历史角色、采样和宏副作用，但保留世界事实',async()=>{
+  const preset=importPreset({temperature:2,openai_max_tokens:20,stop:['}'],prompts:[{identifier:'main',content:'ROLEPLAY_ONLY {{incvar::count}}'},{identifier:'prefill',role:'assistant',content:'STORY_PREFIX'}],extensions:{regex_scripts:[{scriptName:'rewrite input',findRegex:'/重新规划/g',replaceString:'继续正文',placement:[1]}]}});
+  const macroState={local:{count:0},global:{}};
+  const context={preset,macroState,chatHistory:[{role:'assistant',content:'HISTORY_AS_ROLE'}],world:{time:'2024'},regeneration:{from:2,instruction:'调整行程'},summaries:[{number:1,summary:'已完成事件'}]};
+  const calls=[];const provider=new Provider(async(_url,options)=>{const body=JSON.parse(options.body);calls.push(body);return response(calls.length===1?'一次错误的正文':'{"text":"大纲"}');});
+  assert.deepEqual(await provider.json(profile,'重新规划后续故事',context,schema),{text:'大纲'});assert.equal(calls.length,2);
+  for(const call of calls) {
+    assert.deepEqual(call.messages.map(m=>m.role),['system','user']);assert.equal(call.temperature,undefined);assert.equal(call.max_tokens,undefined);assert.equal(call.stop,undefined);
+    assert.ok(!JSON.stringify(call).includes('ROLEPLAY_ONLY'));assert.ok(!JSON.stringify(call).includes('STORY_PREFIX'));assert.ok(!JSON.stringify(call).includes('HISTORY_AS_ROLE'));
+    const input=JSON.parse(call.messages[1].content);assert.equal(input.task,'重新规划后续故事');assert.deepEqual(input.context.world,context.world);assert.deepEqual(input.context.regeneration,context.regeneration);assert.deepEqual(input.context.summaries,context.summaries);
+  }
+  assert.equal(macroState.local.count,0);assert.ok(JSON.parse(calls[1].messages[1].content).context.jsonFormatRepair);
+  const prose=prepareTextRequest(profile,'正文',context);assert.equal(prose.body.temperature,2);assert.equal(prose.body.messages[0].content,'ROLEPLAY_ONLY 1');assert.equal(macroState.local.count,1);
 });
 test('过长错误响应保留首尾和原始长度；结构错误只有一次诊断',async()=>{
   const long='START'+'x'.repeat(70000)+'END';

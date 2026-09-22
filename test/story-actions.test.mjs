@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 import { buildApp } from '../server/app.mjs';
 import { Store } from '../server/store.mjs';
 import { startMock } from './mock-provider.mjs';
+import { importPreset } from '../server/presets.mjs';
 
 async function harness(t, options = {}) {
   const dir = mkdtempSync(resolve(tmpdir(), 'storymode-actions-'));
@@ -59,6 +60,22 @@ test('完结故事从中间重生成：旧决策和评分失效，只用保留�
   assert.deepEqual(call.context.summaries.map(c=>c.number),[1,2]);
   assert.equal(call.context.regeneration.instruction,'改走水路');
   assert.equal(call.context.world.resources[0].quantity,2398);
+});
+
+test('启用正文预设后重新规划仍发送独立 JSON 请求，后续正文继续使用预设',async t=>{
+  const h=await harness(t,{ending:5,noDecisions:true}),url=`/api/stories/${h.id}`,before=h.store.chapters(h.id);
+  const preset=h.store.savePreset(importPreset({temperature:1.7,stop:['}'],prompts:[{identifier:'main',content:'ROLEPLAY_ONLY'},{identifier:'chatHistory',marker:true}]}));
+  const story=h.store.story(h.id);story.presetId=preset.id;story.presetEnabled=true;h.store.saveStory(story);
+  const start=h.mock.calls.length;
+  assert.equal((await h.post(`${url}/chapters/3/regenerate`,{instruction:'调整行程'})).statusCode,200);
+  await h.app.engine.jobs.get(h.id)?.promise;
+  assert.equal(h.store.story(h.id).status,'completed');assert.deepEqual(h.store.chapters(h.id).slice(0,2),before.slice(0,2));
+  const calls=h.mock.calls.slice(start).filter(c=>c.body.messages);
+  const taskOf=body=>body.messages.map(m=>{try{return JSON.parse(m.content);}catch{return null;}}).findLast(m=>m?.task);
+  const replan=calls.find(c=>taskOf(c.body)?.task.startsWith('重新规划后续故事')).body;
+  assert.deepEqual(replan.messages.map(m=>m.role),['system','user']);assert.equal(replan.stop,undefined);assert.equal(replan.temperature,undefined);assert.ok(!JSON.stringify(replan).includes('ROLEPLAY_ONLY'));
+  const prose=calls.find(c=>taskOf(c.body)?.task.startsWith('写完整一章')).body;
+  assert.equal(prose.messages[0].content,'ROLEPLAY_ONLY');assert.equal(prose.temperature,1.7);assert.deepEqual(prose.stop,['}']);
 });
 
 test('删除运行中的故事先停止任务，不复活章节，同时清理图片并保留其他故事与配置', async t => {

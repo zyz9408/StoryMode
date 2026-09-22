@@ -1,6 +1,6 @@
 import { useState } from 'react';
 export type ModelDiagnostic = {
-  kind:'model_json';created:string;model:string;task:string;presetName:string;outputRegexNames:string[];
+  kind:'model_json';created:string;model:string;task:string;presetName:string;presetApplied?:boolean;outputRegexNames:string[];
   attempts:{number:number;reason:string;finishReason:string;response:string;responseLength:number;truncated:boolean;regexChanged:boolean;originalResponse?:string;originalLength?:number;originalTruncated?:boolean}[];
 };
 export function ModelErrorDetails({message,details}:{message:string;details?:ModelDiagnostic|null}) {
@@ -10,7 +10,7 @@ export function ModelErrorDetails({message,details}:{message:string;details?:Mod
   return <section className="notice danger model-error" role="alert"><p>{message}</p>
     {(details || /JSON/.test(message))&&<details><summary>查看详细内容</summary>
       {!details?<p className="hint">这条旧错误没有保存响应详情。点击“继续推演”重试后，新失败记录会包含模型响应和解析原因；已有章节不会因此被删除。</p>:<>
-        <div className="diagnostic-meta"><span>模型 <strong>{details.model}</strong></span><span>预设 <strong>{details.presetName}</strong></span><span>{new Date(details.created).toLocaleString()}</span></div>
+        <div className="diagnostic-meta"><span>模型 <strong>{details.model}</strong></span><span>{details.presetApplied===false?'写作预设（本次未应用）':'预设'} <strong>{details.presetName}</strong></span><span>{new Date(details.created).toLocaleString()}</span></div>
         <div className="actions wrap"><button type="button" className="secondary" onClick={async()=>{try{await navigator.clipboard.writeText(report);setFeedback('详情已复制。');}catch{setFeedback('复制失败，请使用下载详情。');}}}>复制详情</button><button type="button" className="secondary" onClick={download}>下载详情 JSON</button>{feedback&&<span role="status">{feedback}</span>}</div>
         <p className="hint">以下为本次失败时保存的响应，仅用于排查。重试前可先下载留存。</p>
         {details.outputRegexNames.length>0&&<p>本次启用的输出正则：{details.outputRegexNames.join('、')}</p>}
