@@ -68,3 +68,18 @@ test('预设API导入、编辑、预览、故事启停、导出与SQLite重启�
   // Read persisted library using a separate read/write connection after all jobs are idle.
   const reopened=new Store(file);assert.equal(reopened.preset(p.id).entries[0].enabled,false);assert.equal(reopened.story(s.id).presetEnabled,false);reopened.close();
 });
+
+
+test('超过2MB预设可导入、保存和导出，不受原HTTP大小上限阻拦',async t=>{
+  const dir=mkdtempSync(resolve(tmpdir(),'storymode-large-preset-'));
+  const store=new Store(':memory:'),app=await buildApp({store,dataDir:dir,serveStatic:false});
+  t.after(async()=>{await app.close();rmSync(dir,{recursive:true,force:true});});
+  const source=JSON.stringify({prompts:Array.from({length:11},(_,i)=>({identifier:`large-${i}`,content:'甲'.repeat(195000),enabled:false}))});
+  assert.ok(source.length>2000000);assert.ok(Buffer.byteLength(source)>3*1024*1024);
+  const post=(url,payload)=>app.inject({method:'POST',url,payload,headers:{'x-storymode':'1'}});
+  const result=await post('/api/presets/import',{source,filename:'大型预设.json'});assert.equal(result.statusCode,200);
+  const preset=result.json();preset.name='保存大型预设';
+  assert.equal((await post(`/api/presets/${preset.id}`,preset)).statusCode,200);
+  const exported=(await app.inject(`/api/presets/${preset.id}/export`)).json();
+  assert.equal(exported.name,preset.name);assert.deepEqual(exported.entries,preset.entries);
+});

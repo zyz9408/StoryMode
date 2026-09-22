@@ -21,7 +21,7 @@ export function PresetManager({presets,story,refresh,refreshStory}:{presets:Pres
   const move=(index:number,step:number)=>{if(!draft)return;const entries=[...draft.entries];[entries[index],entries[index+step]]=[entries[index+step],entries[index]];setDraft({...draft,entries});setPreview(null);};
   const save=async()=>{if(draft){await request(`/presets/${id}`,draft);await refresh();}};
   return <div className="preset-manager">
-    <label>导入预设 JSON<input aria-label="导入预设 JSON" type="file" accept=".json,application/json" disabled={busy} onChange={e=>{const file=e.target.files?.[0];if(!file)return;e.target.value='';void act(async()=>{if(file.size>2000000)throw new Error('文件过大，最多 2 MB');const p=await request<Preset>('/presets/import',{source:await file.text(),filename:file.name});await refresh();setId(p.id);setMessage(`已导入 ${p.entries.length} 个条目，尚未启用到故事。`);});}}/></label>
+    <label>导入预设 JSON<input aria-label="导入预设 JSON" type="file" accept=".json,application/json" disabled={busy} onChange={e=>{const file=e.target.files?.[0];if(!file)return;e.target.value='';void act(async()=>{const p=await request<Preset>('/presets/import',{source:await file.text(),filename:file.name});await refresh();setId(p.id);setMessage(`已导入 ${p.entries.length} 个条目，尚未启用到故事。`);});}}/></label>
     <p className="hint">支持 SillyTavern prompts / prompt_order 及本应用导出的 JSON。仅影响小说正文、修订与终局；不会执行扩展脚本，也不会改动模型连接、字数检查或结构化审核。</p>
     {presets.length>0&&<label>管理预设<select aria-label="管理预设" value={id} disabled={busy} onChange={e=>setId(e.target.value)}><option value="">请选择</option>{presets.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>}
     {draft&&<fieldset disabled={busy}>

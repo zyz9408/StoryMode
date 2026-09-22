@@ -29,11 +29,11 @@ export function registerRoutes(app, { store, engine, provider, imagery, storyLoc
     return { ok: true, message: '文字模型连接成功' };
   });
   app.get('/api/presets', async () => store.presets());
-  app.post('/api/presets/import', { bodyLimit:3*1024*1024 }, async req => {
-    const { source, filename } = z.object({ source:z.string().max(2000000), filename:z.string().max(160).default('导入预设') }).parse(req.body);
+  app.post('/api/presets/import', { bodyLimit:Number.MAX_SAFE_INTEGER }, async req => {
+    const { source, filename } = z.object({ source:z.string(), filename:z.string().max(160).default('导入预设') }).parse(req.body);
     return store.savePreset(importPreset(source, filename));
   });
-  app.post('/api/presets/:id', { bodyLimit:3*1024*1024 }, async req => {
+  app.post('/api/presets/:id', { bodyLimit:Number.MAX_SAFE_INTEGER }, async req => {
     if (!store.preset(req.params.id)) throw new Error('预设不存在');
     const preset = presetSchema.parse({ ...req.body, id:req.params.id }); return store.savePreset(preset);
   });

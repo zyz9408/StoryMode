@@ -10,7 +10,6 @@ export const presetSchema = z.object({
   useParameters:z.boolean().default(false), orderId:z.string().max(100).default('默认'), warnings:z.array(z.string().max(1000)).max(50).default([]),
 }).superRefine((p, ctx) => {
   if (new Set(p.entries.map(e => e.identifier)).size !== p.entries.length) ctx.addIssue({code:'custom',message:'预设条目标识重复'});
-  if (JSON.stringify(p).length > 2000000) ctx.addIssue({code:'custom',message:'预设超过 2 MB 字符限制'});
 });
 export function excludedReason(entry) {
   if (entry.marker || slots.has(entry.identifier.toLowerCase())) return '角色、世界和历史由应用提供';
@@ -20,7 +19,6 @@ export function excludedReason(entry) {
 }
 export function importPreset(raw, filename = '导入预设') {
   if (typeof raw === 'string') {
-    if (raw.length > 2000000) throw new Error('文件过大，最多 2 MB');
     try { raw = JSON.parse(raw.replace(/^\uFEFF/, '')); } catch { throw new Error('预设不是有效 JSON'); }
   }
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('预设必须是 JSON 对象');
