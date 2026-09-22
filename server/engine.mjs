@@ -6,7 +6,7 @@ import { setupTask, outlineTask, chapterTask, reviewTask, evaluationTask, rewrit
 
 export class Engine extends EventEmitter {
   constructor(store, provider) { super(); this.store = store; this.provider = provider; this.jobs = new Map(); }
-  publish(s) { this.store.saveStory(s); this.emit(s.id, { type: 'state', status: s.status, progress: s.progress }); }
+  publish(s) { this.store.saveGlobalVariables?.(); this.store.saveStory(s); this.emit(s.id, { type: 'state', status: s.status, progress: s.progress }); }
   async pause(id) {
     const job = this.jobs.get(id); if (!job) return;
     job.controller.abort(); await job.promise;
@@ -28,11 +28,14 @@ export class Engine extends EventEmitter {
     return job.promise;
   }
   guard(signal) { if (signal.aborted) throw new Error('已暂停'); }
+  macroState(s) { s.macroState ||= {local:{}}; return {local:s.macroState.local,global:this.store.globalVariables?.() || (s.macroState.global ||= {})}; }
   checkpoint(s, signal) { this.guard(signal); this.publish(s); }
   context(s) {
     const chapters = this.store.chapters(s.id);
     return {
       event: s.event, player: s.name, preset: this.store.activePreset(s), protagonist: s.protagonist, setup: s.setup, grounding: s.grounding,
+      macroState: this.macroState(s),
+      chatHistory: chapters.flatMap(c=>[{role:'assistant',content:c.body},...s.decisions.filter(d=>d.chapter===c.number).map(d=>({role:'user',content:d.choice}))]),
       research: s.researchNotes.slice(-5).map(n => ({ notes: n.notes.slice(0, 8000), query: n.query })),
       sources: s.sources,
       world: s.world, outline: s.outline, regeneration: s.regeneration,
@@ -186,6 +189,8 @@ export class Engine extends EventEmitter {
     if (!original) throw new Error('待重写章节不存在');
     const profile = await this.store.profile(s.textProfile);
     const ctx = { event: s.event, setup: s.setup, protagonist: s.protagonist, player:s.name, preset:this.store.activePreset(s), original,
+      macroState:this.macroState(s),
+      chatHistory:chapters.filter(c=>c.number<d.number).map(c=>({role:'assistant',content:c.body})),
       previousWorld: original.beforeWorld || chapters.find(c => c.number === d.number - 1)?.world || null,
       nextChapterSummary: chapters.find(c => c.number === d.number + 1)?.summary || '',
       decisions: s.decisions, pendingDecision: s.pendingDecision,

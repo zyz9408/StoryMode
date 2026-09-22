@@ -12,6 +12,7 @@ export class Store {
     this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
       CREATE TABLE IF NOT EXISTS profiles(id TEXT PRIMARY KEY, data TEXT NOT NULL, secret TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS presets(id TEXT PRIMARY KEY, data TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS app_preferences(id TEXT PRIMARY KEY, data TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS stories(id TEXT PRIMARY KEY, data TEXT NOT NULL, updated TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS chapters(story_id TEXT NOT NULL REFERENCES stories(id), number INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY(story_id,number));
       CREATE TABLE IF NOT EXISTS illustrations(story_id TEXT NOT NULL REFERENCES stories(id), target TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY(story_id,target));`);
@@ -50,6 +51,8 @@ export class Store {
   preset(id) { const row = this.db.prepare('SELECT data FROM presets WHERE id=?').get(id); return row ? JSON.parse(row.data) : null; }
   savePreset(preset) { this.db.prepare('INSERT INTO presets VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data').run(preset.id, JSON.stringify(preset)); return preset; }
   activePreset(s) { return s.presetEnabled && s.presetId ? this.preset(s.presetId) : null; }
+  globalVariables() { return this._globalVariables ||= JSON.parse(this.db.prepare("SELECT data FROM app_preferences WHERE id='macroGlobals'").get()?.data || '{}'); }
+  saveGlobalVariables() { if(this._globalVariables) this.db.prepare("INSERT INTO app_preferences VALUES('macroGlobals',?) ON CONFLICT(id) DO UPDATE SET data=excluded.data").run(JSON.stringify(this._globalVariables)); }
   async profile(id) {
     const row = this.db.prepare('SELECT * FROM profiles WHERE id=?').get(id);
     if (!row) throw new Error('请先在连接设置中保存并选择模型配置');

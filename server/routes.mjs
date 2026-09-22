@@ -1,6 +1,9 @@
 import { z } from 'zod';
-import { normalizeBaseUrl } from './provider.mjs';
-import { importPreset, presetSchema, resolvePreset } from './presets.mjs';
+import { normalizeBaseUrl, prepareTextRequest } from './provider.mjs';
+import { importPreset, importRegex, exportPreset, presetSchema } from './presets.mjs';
+import { chapterTask } from './prompts.mjs';
+import { applyRegex } from './tavern-regex.mjs';
+import { createMacroEnvironment } from './tavern-macros.mjs';
 import { profileSchema, createSchema, setupSchema, text, topicsSchema, protagonistSchema } from './schema.mjs';
 
 // Shared by the local HTTP service and the browser runtime.
@@ -39,12 +42,21 @@ export function registerRoutes(app, { store, engine, provider, imagery, storyLoc
   });
   app.post('/api/presets/:id/preview', async req => {
     const preset = store.preset(req.params.id); if (!preset) throw new Error('预设不存在');
-    const { storyId } = z.object({ storyId:z.string().optional() }).parse(req.body || {});
-    return resolvePreset(preset, storyId ? engine.context(get(storyId)) : {player:'玩家',protagonist:{name:'主角'},event:'示例模拟事件'});
+    const { storyId, task, json } = z.object({ storyId:z.string().optional(), task:z.string().default(chapterTask), json:z.boolean().default(false) }).parse(req.body || {});
+    const context = storyId ? structuredClone(engine.context(get(storyId))) : {player:'玩家',protagonist:{name:'主角'},event:'示例模拟事件'};
+    const profile = storyId && get(storyId).textProfile ? await store.profile(get(storyId).textProfile) : {model:'预览模型',stream:true};
+    const {resolved,body} = prepareTextRequest(profile,task,{...context,preset},{json});
+    const {transformOutput,macroState,...preview} = resolved;
+    return {...preview,messages:body.messages,request:body};
+  });
+  app.post('/api/presets/:id/regex/import', {bodyLimit:Number.MAX_SAFE_INTEGER}, async req=>{
+    const preset=store.preset(req.params.id); if (!preset) throw new Error('预设不存在');
+    const {source} = z.object({source:z.string()}).parse(req.body);
+    return store.savePreset(presetSchema.parse({...preset,regexScripts:[...(preset.regexScripts || []),...importRegex(source)]}));
   });
   app.get('/api/presets/:id/export', async (req, reply) => {
     const preset=store.preset(req.params.id); if (!preset) throw new Error('预设不存在');
-    return reply.header('Content-Disposition',`attachment; filename="preset-${preset.id}.json"`).type('application/json').send(JSON.stringify(preset,null,2));
+    return reply.header('Content-Disposition',`attachment; filename="preset-${preset.id}.json"`).type('application/json').send(JSON.stringify(exportPreset(preset),null,2));
   });
   app.post('/api/stories/:id/preset', async req => {
     const s = get(req.params.id); idle(s.id);
@@ -62,7 +74,11 @@ export function registerRoutes(app, { store, engine, provider, imagery, storyLoc
     const input = createSchema.parse(req.body); profilesExist(input);
     const s = store.create(input); launch(s.id); return { id: s.id };
   });
-  app.get('/api/stories/:id', async req => ({ ...get(req.params.id), chapters: store.chapters(req.params.id), illustrations: store.illustrations(req.params.id), running: engine.jobs.has(req.params.id) }));
+  app.get('/api/stories/:id', async req => {
+    const story=get(req.params.id), preset=store.activePreset(story), chapters=store.chapters(story.id);
+    const environment=createMacroEnvironment({...story,player:story.name,macroState:structuredClone(engine.macroState(story))});
+    return {...story,chapters:chapters.map((chapter,index)=>({...chapter,displayBody:applyRegex(chapter.body,preset?.regexScripts,2,{isMarkdown:true,depth:chapters.length-index-1,substitute:environment.substitute})})),illustrations:store.illustrations(story.id),running:engine.jobs.has(story.id)};
+  });
   app.post('/api/stories/:id/confirm', async req => {
     const s = get(req.params.id); idle(s.id);
     if (s.phase !== 'confirm') throw new Error('当前模拟不能修改开局');

@@ -98,16 +98,19 @@ npm start
 
 ## 写作预设
 
-侧栏「写作预设」支持导入 SillyTavern JSON（`prompts` / `prompt_order`），保留条目名称、角色元数据、内容和开关，优先采用非空的 `100001` 编排。可以编辑内容、调整顺序、单独开关或批量关闭条目，保存后预览实际注入内容，并导出重新导入。
+侧栏「写作预设」支持 SillyTavern Chat Completion JSON（`prompts` / `prompt_order`）。实现以本机 SillyTavern `8172dcd0ee672d3cd9a5e5f7af134f91a45cd2b8` 的 PromptManager、OpenAI 消息编排和 regex 引擎为对照。
 
-- 导入不会自动开启：新建模拟中选择预设并勾选启用；已有故事打开预设管理，在暂停写作后「应用到当前故事」，可以随时停用。库内条目更改在下一次正文请求生效，不改已完成章节。
-- 预设用于小说正文、修订、章节重写和终局写作。模型连接、图片、主题推荐、JSON 审核、字数和世界状态检查仍使用应用原有流程。
-- 支持 `{{user}}`、`{{char}}`、`{{lastUserMessage}}`、简单字符串 `setvar/getvar`、注释与 `trim`；未知宏略过并在预览列出。不执行任何 JavaScript、任务脚本、正则扩展或链接加载，不导入密钥、联网开关、最大输出或酒馆深度注入设置。`SPresetSettings` 只作不可启用的扩展元数据保留。
-- 角色、世界与历史占位条目由应用上下文提供；assistant 条目作为可选创作参考，不伪装成已经发生的助手回复，也不作为输出前缀。预设中的格式要求不能覆盖小说正文和结局规则。
-- 每次注入最多 48,000 字符，超过预算的完整条目会跳过并在预览说明；可减少启用条目。导入和保存不再设置 2 MB 文件大小限制或单条内容 20 万字符限制；仍校验预设格式与条目结构。
-- 温度、top_p、频率及存在惩罚参数可单独勾选启用；未勾选不发送，供应商不支持时可以关闭此选项。
+- `system`、`user`、`assistant` 条目直接成为请求里的消息，不再嵌入 `creativePreset`。保留编排开关、深度、优先级、触发类型及禁止覆盖设置；同深度的优先级和角色分组按参考版本处理。
+- 导入后选择预设并启用。预设用于正文，以及携带故事预设的 JSON 任务；JSON 任务使用 `quiet` 触发类型，并在末尾添加结构化输出控制消息。连接测试、主题推荐、生图和独立联网接口不携带故事预设。
+- 角色、性格、情景、世界信息和历史占位由 StoryMode 上下文填充。已有章节作为 assistant 历史，玩家决策作为 user 历史。当前任务作为 user 消息；没有启用 `chatHistory` 的简化预设会在末尾附加历史及任务，预览会提示这个适配行为。
+- 支持嵌套的用户、角色、描述、情景、最后消息等宏；局部与全局变量的 set/get/add/inc/dec/has/delete/flush；注释、trim、newline、space、random、基础骰子和日期时间。局部变量随故事保存，全局变量在本应用各故事间共享。未知宏保留原文并列在预览中，不再静默删除。预览和显示正则使用变量副本，不更改存档变量。
+- 导入预设中的 `extensions.regex_scripts`，也可独立导入单条或数组格式正则。编辑器支持排序、开关、替换内容、捕获裁剪、查找宏转义、深度和应用范围。`$0` / `{{match}}`、编号和命名捕获遵循酒馆规则。普通 AI 输出替换在生成完成后写入正文；`promptOnly` 只改变发送的历史，`markdownOnly` 只改变阅读显示。不会把显示过滤后的文本写回正文或用于审核。跨流式块的匹配会在完整文本上处理，启用普通输出正则时文本在完成后统一显示。
+- 采样参数默认随新导入预设开启，包括温度、top_p、惩罚、top_k/min_p 等，以及 `openai_max_tokens` 对应的 `max_tokens`、seed、stop、reasoning_effort、verbosity；供应商必须支持所选参数，可在编辑器关闭参数应用。连接地址、模型和 API Key 仍取自模型连接设置。
+- 移除了原有的 48,000 字符静默跳过预算。导出同时包含酒馆的 `prompts`、`prompt_order`、`extensions.regex_scripts` 和本应用编辑字段，保留其他编排及扩展数据。保存并预览可查看消息角色、内容、解析诊断和完整请求 JSON（不含鉴权）。预览使用正文任务模板；实际生成还会加入当时的章号、场景和修订条件。
 
-预设管理思路参考 [Chronicles of Chaos](https://github.com/zyz9408/chronicles-of-chaos/blob/main/src/engine/prompts/TavernPresetStore.ts)，本应用采用 SQLite 持久化和独立的小说写作适配。
+兼容边界：这不是整个 SillyTavern 运行时。酒馆助手 / SPreset / STscript / JavaScript 扩展仅保留数据，不执行；世界书关键词激活、全部新宏语法、模型专用 tokenizer 的上下文裁剪、供应商专用消息后处理和原生 Claude/Gemini 文字发送协议尚未移植。当前文字请求使用现有 OpenAI-compatible `chat/completions` 通道，HTML 替换结果仍作为文本显示，不运行网页。不能把此实现称为与所有酒馆扩展和供应商 100% 等价。UI 中会提示未知宏、无效正则及上下文裁剪差异。
+
+验证：`npm test` 包含消息编排、正则、参数、变量持久化、导出再导入、流式跨块和 API 测试。设置 `SILLYTAVERN_REFERENCE` 为酒馆源码目录，可额外运行直接调用该版本 regex 引擎与深度编排函数的差分测试；本机默认检查 `E:/SillyTavern-Launcher/SillyTavern`。测试仅读取源码，不连接模型、不复制用户预设入仓库。本地 UI 与 Pages 测试需串行运行（它们共用模拟供应商端口 3213）；未安装 Playwright 浏览器时可设置 `PLAYWRIGHT_CHANNEL=msedge` 使用已安装的 Edge。
 
 ## 生成与阅读
 
@@ -173,8 +176,9 @@ python -m unittest discover -s test -p test_launcher.py
 | `GET /api/presets` | 本地预设库 |
 | `POST /api/presets/import` | `{source, filename}` 导入 JSON 文本 |
 | `POST /api/presets/:id` | 保存条目开关、内容、顺序和采样选项 |
-| `POST /api/presets/:id/preview` | `{storyId?}` 预览有效提示词和略过原因 |
-| `GET /api/presets/:id/export` | 导出本应用兼容的预设 JSON |
+| `POST /api/presets/:id/preview` | `{storyId?, task?, json?}` 预览消息、参数和兼容诊断 |
+| `POST /api/presets/:id/regex/import` | `{source}` 导入独立正则 JSON |
+| `GET /api/presets/:id/export` | 导出兼容 SillyTavern 与本应用的预设 JSON |
 | `POST /api/stories/:id/preset` | `{presetId, presetEnabled}` 选择、启用或停用预设 |
 | `GET/POST /api/stories` | 书架 / 新建模拟 |
 | `POST /api/topics` | `{profileId, direction?, previous?}` AI 生成模拟主题 |

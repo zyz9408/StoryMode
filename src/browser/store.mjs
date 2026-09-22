@@ -1,11 +1,11 @@
 const clone = value => value == null ? value : structuredClone(value);
-const tables = ['profiles','presets','stories','chapters','illustrations','images'];
+const tables = ['profiles','presets','stories','chapters','illustrations','images','preferences'];
 export class BrowserStore {
   static async open() {
     const name = 'storymode-pages-v1:' + location.pathname.replace(/index\.html$/, '');
     const db = await new Promise((resolve,reject) => {
-      const r = indexedDB.open(name,1);
-      r.onupgradeneeded = () => { for (const table of tables) r.result.createObjectStore(table); };
+      const r = indexedDB.open(name,2);
+      r.onupgradeneeded = () => { for (const table of tables) if(!r.result.objectStoreNames.contains(table)) r.result.createObjectStore(table); };
       r.onsuccess = () => resolve(r.result); r.onerror = () => reject(new Error('无法打开浏览器数据库，请允许网站存储。'));
     });
     const store = new BrowserStore(db,name);
@@ -52,6 +52,8 @@ export class BrowserStore {
   preset(id) { return clone(this.data.presets.get(id))||null; }
   savePreset(p) { this.put('presets',p.id,p);return p; }
   activePreset(s) { return s.presetEnabled?this.preset(s.presetId):null; }
+  globalVariables() { return this._globalVariables ||= clone(this.data.preferences.get('macroGlobals')) || {}; }
+  saveGlobalVariables() { if(this._globalVariables) this.put('preferences','macroGlobals',this._globalVariables); }
   create(input) {
     const s={...input,id:crypto.randomUUID(),title:input.event.slice(0,36),status:'preparing',phase:'setup',setup:null,world:null,outline:[],sources:[],researchNotes:[],decisions:[],pendingDecision:null,draft:null,evaluation:null,progress:'等待解析事件',error:'',offline:input.offline!==false,grounding:input.offline===false?'pending':'model',created:new Date().toISOString()};
     this.saveStory(s);return s;

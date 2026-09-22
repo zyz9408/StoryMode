@@ -53,7 +53,8 @@ export async function startMock(options = {}) {
       res.end(JSON.stringify({output:[...(options.noSearch?[]:[{type:'web_search_call',status:'completed'}]),{type:'message',content:[{type:'output_text',text:'测试考据：历史背景有约束，反事实结果不确定。',annotations:options.noSearch?[]:[{type:'url_citation',url:'https://example.com/history',title:'测试来源'}]}]}]}));return;
     }
     if(body.web_search_options){res.end(JSON.stringify({choices:[{message:{content:'测试考据事实与争议。',annotations:[{type:'url_citation',url_citation:{url:'https://example.com/history',title:'测试来源'}}]},finish_reason:'stop'}]}));return;}
-    const input=JSON.parse(body.messages.at(-1).content);
+    const input=body.messages.map(m=>{try{return JSON.parse(m.content);}catch{return null;}}).findLast(m=>m?.task && m.context);
+    if(!input){res.statusCode=400;res.end(JSON.stringify({error:'No StoryMode task message'}));return;}
     if(options.delay)await new Promise(r=>setTimeout(r,options.delay));
     let value=input.task.startsWith('连接测试')?'连接成功':fixture(input.task,input.context,options);
     if(typeof value==='string'&&input.task.startsWith('写本章第'))value=value.slice(0,Math.ceil(value.length/3));
