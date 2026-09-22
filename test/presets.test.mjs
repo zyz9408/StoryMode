@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { importPreset, resolvePreset, exportPreset } from '../server/presets.mjs';
 import { Store } from '../server/store.mjs';
+import { BrowserStore } from '../src/browser/store.mjs';
 import { Provider } from '../server/provider.mjs';
 import { buildApp } from '../server/app.mjs';
 import { startMock } from './mock-provider.mjs';
@@ -110,4 +111,20 @@ test('全局宏跨故事共享并持久化，局部宏随故事独立保存',()=
     let store=new Store(file);store.globalVariables().test='shared';store.saveGlobalVariables();store.close();
     store=new Store(file);assert.equal(store.globalVariables().test,'shared');store.close();
   } finally {rmSync(dir,{recursive:true,force:true});}
+});
+
+test('SQLite 与浏览器旧存档读取时恢复内嵌正则，清空并保存后不复活',()=>{
+  const legacy=importPreset({prompts:[{identifier:'main',content:'test'}],extensions:{regex_scripts:[{scriptName:'旧规则',findRegex:'/old/g',replaceString:'new',placement:[2]}]}});
+  delete legacy.regexScripts;
+  const store=new Store(':memory:');
+  const browser=new BrowserStore(null,'test');browser.data.presets=new Map([[legacy.id,structuredClone(legacy)]]);
+  try {
+    store.savePreset(legacy);
+    for(const database of [store,browser]) {
+      assert.equal(database.presets()[0].regexScripts[0].scriptName,'旧规则');
+      assert.equal(database.preset(legacy.id).regexScripts[0].replaceString,'new');
+    }
+    const cleared={...store.preset(legacy.id),regexScripts:[]};store.savePreset(cleared);browser.data.presets.set(legacy.id,cleared);
+    assert.deepEqual(store.preset(legacy.id).regexScripts,[]);assert.deepEqual(browser.preset(legacy.id).regexScripts,[]);
+  } finally {store.close();}
 });

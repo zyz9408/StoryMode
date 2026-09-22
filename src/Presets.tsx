@@ -21,7 +21,7 @@ export function PresetManager({presets,story,refresh,refreshStory}:{presets:Pres
   const move=(index:number,step:number)=>{if(!draft)return;const entries=[...draft.entries];[entries[index],entries[index+step]]=[entries[index+step],entries[index]];setDraft({...draft,entries});setPreview(null);};
   const save=async()=>{if(draft){await request(`/presets/${id}`,draft);await refresh();}};
   return <div className="preset-manager">
-    <label>导入预设 JSON<input aria-label="导入预设 JSON" type="file" accept=".json,application/json" disabled={busy} onChange={e=>{const file=e.target.files?.[0];if(!file)return;e.target.value='';void act(async()=>{const p=await request<Preset>('/presets/import',{source:await file.text(),filename:file.name});await refresh();setId(p.id);setMessage(`已导入 ${p.entries.length} 个条目，尚未启用到故事。`);});}}/></label>
+    <label>导入预设 JSON<input aria-label="导入预设 JSON" type="file" accept=".json,application/json" disabled={busy} onChange={e=>{const file=e.target.files?.[0];if(!file)return;e.target.value='';void act(async()=>{const p=await request<Preset>('/presets/import',{source:await file.text(),filename:file.name});await refresh();setId(p.id);setMessage(`已导入 ${p.entries.length} 个条目，自动读取 ${p.regexScripts?.length||0} 条正则，尚未启用到故事。`);});}}/></label>
     <p className="hint">支持 SillyTavern Chat Completion 预设、消息角色、编排、深度注入和正则。预设用于正文及结构化任务；结构化任务使用 quiet 触发类型。预览可查看最终发送的消息和参数。</p>
     {presets.length>0&&<label>管理预设<select aria-label="管理预设" value={id} disabled={busy} onChange={e=>setId(e.target.value)}><option value="">请选择</option>{presets.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>}
     {draft&&<fieldset disabled={busy}>
@@ -29,7 +29,7 @@ export function PresetManager({presets,story,refresh,refreshStory}:{presets:Pres
       <div className="preset-summary">编排 {draft.orderId} · {draft.entries.length} 个条目 · {draft.entries.filter(e=>e.enabled&&!unavailable(e)).length} 个已开启</div>
       <label className="checkbox"><input type="checkbox" checked={draft.useParameters} onChange={e=>setDraft({...draft,useParameters:e.target.checked})}/>同时应用采样参数（供应商需支持）</label>
       <p className="hint">{Object.entries(draft.parameters).map(([k,v])=>`${k}: ${v}`).join(' · ')||'文件中没有兼容的采样参数'}</p>
-      <label>导入正则 JSON<input type="file" accept=".json,application/json" onChange={e=>{const file=e.target.files?.[0];if(!file)return;e.target.value='';void act(async()=>{await save();const p=await request<Preset>(`/presets/${id}/regex/import`,{source:await file.text()});await refresh();setDraft(p);setMessage('正则已导入并保存。');});}}/></label>
+      <label>导入正则 JSON（也可选择预设文件）<input aria-label="导入正则 JSON" type="file" accept=".json,application/json" onChange={e=>{const file=e.target.files?.[0];if(!file)return;e.target.value='';void act(async()=>{await save();const before=draft.regexScripts?.length||0;const p=await request<Preset>(`/presets/${id}/regex/import`,{source:await file.text()});await refresh();setDraft(p);setPreview(null);setMessage(`已读取并保存 ${(p.regexScripts?.length||0)-before} 条正则。`);});}}/></label>
       <RegexEditor scripts={draft.regexScripts||[]} change={regexScripts=>{setDraft({...draft,regexScripts});setPreview(null);}}/>
       <details><summary>导入兼容说明</summary>{draft.warnings.map((w,i)=><p className="hint" key={i}>{w}</p>)}</details>
       <label>搜索条目<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="按名称筛选"/></label>

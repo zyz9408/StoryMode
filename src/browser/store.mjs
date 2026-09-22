@@ -1,3 +1,4 @@
+import { presetSchema } from '../../server/presets.mjs';
 const clone = value => value == null ? value : structuredClone(value);
 const tables = ['profiles','presets','stories','chapters','illustrations','images','preferences'];
 export class BrowserStore {
@@ -48,8 +49,8 @@ export class BrowserStore {
   }
   profiles() { return [...this.data.profiles.values()].map(p=>({...clone(p),hasKey:!!sessionStorage.getItem(this.key(p.id))})); }
   async profile(id) { const p=this.data.profiles.get(id);if(!p)throw new Error('请先保存并选择模型配置');return {...clone(p),apiKey:sessionStorage.getItem(this.key(id))||''}; }
-  presets() { return clone([...this.data.presets.values()]); }
-  preset(id) { return clone(this.data.presets.get(id))||null; }
+  presets() { return [...this.data.presets.values()].map(p=>presetSchema.parse(clone(p))); }
+  preset(id) { const p=this.data.presets.get(id);return p?presetSchema.parse(clone(p)):null; }
   savePreset(p) { this.put('presets',p.id,p);return p; }
   activePreset(s) { return s.presetEnabled?this.preset(s.presetId):null; }
   globalVariables() { return this._globalVariables ||= clone(this.data.preferences.get('macroGlobals')) || {}; }

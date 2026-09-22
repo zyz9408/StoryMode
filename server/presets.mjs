@@ -18,7 +18,15 @@ const entrySchema = z.object({
   injection_depth:z.number().int().min(0).default(4), injection_order:z.number().default(100),
   injection_trigger:z.array(z.string()).default([]), forbid_overrides:z.boolean().default(false),
 }).passthrough();
-export const presetSchema = z.object({
+// Canonical editor data wins, including an intentionally emptied script list.
+// Older exports can carry scripts only inside the preset extension container.
+export function presetRegexSource(raw) {
+  if (!raw || typeof raw !== 'object') return undefined;
+  if (Object.hasOwn(raw,'regexScripts')) return raw.regexScripts;
+  const sources=[raw.extensions?.regex_scripts,raw.regex_scripts,raw.extensions?.extensions?.regex_scripts];
+  return sources.find(value=>Array.isArray(value) && value.length) ?? sources.find(value=>value !== undefined);
+}
+export const presetSchema = z.preprocess(raw=>raw && typeof raw==='object' ? {...raw,regexScripts:presetRegexSource(raw) ?? []} : raw,z.object({
   id:z.string().max(100).optional(), name:z.string().trim().min(1).max(160), entries:z.array(entrySchema).min(1),
   parameters:z.record(z.string(),z.unknown()).default({}), settings:z.record(z.string(),z.unknown()).default({}),
   regexScripts:z.array(regexSchema).default([]), extensions:z.record(z.string(),z.unknown()).default({}),
@@ -26,7 +34,7 @@ export const presetSchema = z.object({
   useParameters:z.boolean().default(true), orderId:z.string().default('100001'), warnings:z.array(z.string()).default([]),
 }).superRefine((p,ctx)=>{
   if (new Set(p.entries.map(e=>e.identifier)).size !== p.entries.length) ctx.addIssue({code:'custom',message:'预设条目标识重复'});
-});
+}));
 export function excludedReason(entry) {
   return entry.identifier.toLowerCase() === 'spresetsettings' ? '扩展配置（保留但不执行 JavaScript）' : '';
 }
@@ -38,7 +46,7 @@ function parseSource(raw) {
 }
 export function importRegex(raw) {
   raw = parseSource(raw);
-  const list = Array.isArray(raw) ? raw : raw?.regex_scripts || raw?.extensions?.regex_scripts || raw?.regexScripts || (raw?.findRegex != null ? [raw] : null);
+  const list = Array.isArray(raw) ? raw : presetRegexSource(raw) ?? (raw?.findRegex != null ? [raw] : null);
   if (!Array.isArray(list)) throw new Error('未找到 SillyTavern 正则脚本');
   return list.map(item=>regexSchema.parse({...item,id:item.id || randomUUID()}));
 }
@@ -65,7 +73,7 @@ export function importPreset(raw, filename = '导入预设') {
   for (const p of byId.values()) if (!used.has(p.identifier)) entries.push({...p,enabled:order ? false : p.enabled});
   const parameters = Object.fromEntries(parameterKeys.filter(k=>raw[k] !== undefined).map(k=>[k,raw[k]]));
   const settings = Object.fromEntries(settingKeys.filter(k=>raw[k] !== undefined).map(k=>[k,raw[k]]));
-  const regexScripts = raw.extensions?.regex_scripts || raw.regex_scripts || [];
+  const regexScripts = presetRegexSource(raw) ?? [];
   const warnings = [];
   if (orders.length>1) warnings.push(`当前采用 ${order.character_id} 编排；其他编排保留在导出文件中。`);
   if (Object.keys(raw.extensions || {}).some(k=>k !== 'regex_scripts')) warnings.push('附带扩展数据已保留；需要 SillyTavern 扩展运行时的脚本不会执行。');

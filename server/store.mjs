@@ -3,6 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { protect, unprotect } from './secrets.mjs';
+import { presetSchema } from './presets.mjs';
 
 export class Store {
   constructor(filename, crypto = { protect, unprotect }) {
@@ -47,8 +48,8 @@ export class Store {
     return { ...data, hasKey: !!secret };
   }
   profiles() { return this.db.prepare('SELECT * FROM profiles').all().map(r => ({ ...JSON.parse(r.data), hasKey: !!r.secret })); }
-  presets() { return this.db.prepare('SELECT data FROM presets').all().map(r => JSON.parse(r.data)); }
-  preset(id) { const row = this.db.prepare('SELECT data FROM presets WHERE id=?').get(id); return row ? JSON.parse(row.data) : null; }
+  presets() { return this.db.prepare('SELECT data FROM presets').all().map(r => presetSchema.parse(JSON.parse(r.data))); }
+  preset(id) { const row = this.db.prepare('SELECT data FROM presets WHERE id=?').get(id); return row ? presetSchema.parse(JSON.parse(row.data)) : null; }
   savePreset(preset) { this.db.prepare('INSERT INTO presets VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data').run(preset.id, JSON.stringify(preset)); return preset; }
   activePreset(s) { return s.presetEnabled && s.presetId ? this.preset(s.presetId) : null; }
   globalVariables() { return this._globalVariables ||= JSON.parse(this.db.prepare("SELECT data FROM app_preferences WHERE id='macroGlobals'").get()?.data || '{}'); }

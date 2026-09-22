@@ -100,6 +100,8 @@ npm start
 
 侧栏「写作预设」支持 SillyTavern Chat Completion JSON（`prompts` / `prompt_order`）。实现以本机 SillyTavern `8172dcd0ee672d3cd9a5e5f7af134f91a45cd2b8` 的 PromptManager、OpenAI 消息编排和 regex 引擎为对照。
 
+**添加正则**：打开「写作预设」，选择预设，在「正则脚本」点击「添加正则」，填写查找表达式（例如 `/旧词/g`）和替换内容，然后「保存预设」。可调整顺序、开关和应用范围，并单独导出正则 JSON。导入完整预设时自动读取内嵌正则并显示条数；「导入正则 JSON」也接受完整预设文件，只提取正则到当前预设，不改变提示词。兼容 `extensions.regex_scripts`、顶层 `regex_scripts` / `regexScripts` 及旧嵌套 `extensions.extensions.regex_scripts`。已保存的旧格式数据在读取时自动适配；手动清空的正则列表不会从旧扩展元数据中重新恢复。
+
 - `system`、`user`、`assistant` 条目直接成为请求里的消息，不再嵌入 `creativePreset`。保留编排开关、深度、优先级、触发类型及禁止覆盖设置；同深度的优先级和角色分组按参考版本处理。
 - 导入后选择预设并启用。预设用于正文，以及携带故事预设的 JSON 任务；JSON 任务使用 `quiet` 触发类型，并在末尾添加结构化输出控制消息。连接测试、主题推荐、生图和独立联网接口不携带故事预设。
 - 角色、性格、情景、世界信息和历史占位由 StoryMode 上下文填充。已有章节作为 assistant 历史，玩家决策作为 user 历史。当前任务作为 user 消息；没有启用 `chatHistory` 的简化预设会在末尾附加历史及任务，预览会提示这个适配行为。

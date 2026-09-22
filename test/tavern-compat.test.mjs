@@ -5,11 +5,28 @@ import { join } from 'node:path';
 import vm from 'node:vm';
 import { applyRegex, runRegex, regexFromString } from '../server/tavern-regex.mjs';
 import { createMacroEnvironment } from '../server/tavern-macros.mjs';
-import { importPreset, exportPreset, importRegex, resolvePreset } from '../server/presets.mjs';
+import { importPreset, exportPreset, importRegex, resolvePreset, presetSchema } from '../server/presets.mjs';
 import { Provider, prepareTextRequest } from '../server/provider.mjs';
 
 const profile={baseUrl:'https://example.invalid/v1',model:'test',stream:true};
 const script=(patch={})=>importRegex({scriptName:'test',findRegex:'/foo/g',replaceString:'bar',placement:[2],...patch})[0];
+
+test('preset import reads embedded regexes from standard, legacy and nested exports',()=>{
+  const rule=script();
+  for(const fields of [{extensions:{regex_scripts:[rule]}},{regex_scripts:[rule]},{extensions:{extensions:{regex_scripts:[rule]}}},{regexScripts:[rule]}]) {
+    const raw={prompts:[{identifier:'main',content:'test'}],...fields};
+    const preset=importPreset(raw);
+    assert.deepEqual(preset.regexScripts,[rule]);assert.deepEqual(importRegex(raw),[rule]);
+    const legacy={...preset,...fields};delete legacy.regexScripts;
+    if(fields.regexScripts) legacy.regex_scripts=fields.regexScripts;
+    assert.deepEqual(importPreset(legacy).regexScripts,[rule]);
+    assert.deepEqual(presetSchema.parse(legacy).regexScripts,[rule]);
+  }
+  const empty={...importPreset({prompts:[{identifier:'main',content:'test'}]}),regexScripts:[],extensions:{regex_scripts:[rule]}};
+  assert.deepEqual(importPreset(empty).regexScripts,[],'deliberately deleted rules must not return from extension metadata');
+  assert.deepEqual(importRegex(empty),[]);
+  assert.throws(()=>importRegex({extensions:{regex_scripts:'invalid'}}),/未找到/);
+});
 
 test('regex domains remain separate; depth, edit and disabled filters match ST semantics',()=>{
   const scripts=[script(),script({findRegex:'/bar/g',replaceString:'stored'}),script({promptOnly:true,findRegex:'/stored/g',replaceString:'sent'}),script({markdownOnly:true,findRegex:'/stored/g',replaceString:'shown'})];
