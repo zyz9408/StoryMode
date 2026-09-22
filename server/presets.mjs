@@ -5,7 +5,7 @@ const slots = new Set(['chathistory','worldinfobefore','worldinfoafter','chardes
 const ranges = { temperature:[0,2], top_p:[0,1], frequency_penalty:[-2,2], presence_penalty:[-2,2] };
 export const presetSchema = z.object({
   id:z.string().max(100).optional(), name:z.string().trim().min(1).max(160),
-  entries:z.array(z.object({ identifier:z.string().min(1).max(200), name:z.string().max(200), role:z.enum(['system','user','assistant']), content:z.string().max(200000), enabled:z.boolean(), marker:z.boolean().default(false) })).min(1).max(500),
+  entries:z.array(z.object({ identifier:z.string().min(1).max(200), name:z.string().max(200), role:z.enum(['system','user','assistant']), content:z.string(), enabled:z.boolean(), marker:z.boolean().default(false) })).min(1).max(500),
   parameters:z.object({ temperature:z.number().min(0).max(2).optional(), top_p:z.number().min(0).max(1).optional(), frequency_penalty:z.number().min(-2).max(2).optional(), presence_penalty:z.number().min(-2).max(2).optional() }).default({}),
   useParameters:z.boolean().default(false), orderId:z.string().max(100).default('默认'), warnings:z.array(z.string().max(1000)).max(50).default([]),
 }).superRefine((p, ctx) => {
