@@ -26,7 +26,7 @@ export async function buildApp({ dataDir = resolve('data'), store = new Store(re
   app.setErrorHandler((error, req, reply) => {
     const validation = error instanceof z.ZodError;
     const message = validation ? error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('；') : error.message;
-    reply.code(validation ? 400 : error.statusCode || 400).send({ error: message || '操作失败，请重试' });
+    reply.code(validation ? 400 : error.statusCode || 400).send({ error: message || '操作失败，请重试',...(error.details?.kind==='model_json'?{details:error.details}:{}) });
   });
   app.addHook('onRequest', async (req, reply) => {
     const host = (req.headers.host || '').split(':')[0];

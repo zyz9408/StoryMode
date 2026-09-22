@@ -22,6 +22,7 @@ export class Engine extends EventEmitter {
     job.promise = this.run(s, controller.signal).catch(e => {
       s.status = controller.signal.aborted ? 'paused' : 'failed';
       s.error = controller.signal.aborted ? '' : e.message;
+      s.errorDetails = controller.signal.aborted ? null : e.details || null;
       s.progress = controller.signal.aborted ? '已暂停，草稿与检查点已保存' : '生成已停止，可检查配置后重试';
       this.publish(s);
     }).finally(() => { this.jobs.delete(id); this.emit(id, { type: 'idle' }); });
@@ -60,7 +61,7 @@ export class Engine extends EventEmitter {
   }
   async run(s, signal) {
     if (s.rewrite) return this.rewrite(s, signal);
-    s.error = ''; s.status = s.phase === 'chapters' || s.phase === 'evaluation' ? 'generating' : 'preparing';
+    s.error = ''; s.errorDetails=null; s.status = s.phase === 'chapters' || s.phase === 'evaluation' ? 'generating' : 'preparing';
     this.publish(s);
     const profile = await this.store.profile(s.textProfile);
     const json = (task, ctx, schema) => this.provider.json(profile, task, ctx, schema, { signal });
@@ -184,7 +185,7 @@ export class Engine extends EventEmitter {
   async rewrite(s, signal) {
     if (s.rewrite.mode === 'ending') return this.completeEnding(s, signal);
     const d = s.rewrite;
-    s.status = 'generating'; s.error = '';
+    s.status = 'generating'; s.error = ''; s.errorDetails=null;
     const chapters = this.store.chapters(s.id), original = chapters.find(c => c.number === d.number);
     if (!original) throw new Error('待重写章节不存在');
     const profile = await this.store.profile(s.textProfile);
@@ -235,7 +236,7 @@ export class Engine extends EventEmitter {
   async completeEnding(s, signal) {
     const d = s.rewrite, chapters = this.store.chapters(s.id), original = chapters.at(-1);
     if (!original || original.number !== d.number || d.number < 1) throw new Error('只能补全已完成故事的最后一章');
-    s.status = 'generating'; s.error = '';
+    s.status = 'generating'; s.error = ''; s.errorDetails=null;
     const profile = await this.store.profile(s.textProfile);
     const ctx = { ...this.context(s), original, number: d.number, terminal: true, allowDecision: false, isDecision: false, instruction: d.instruction };
     while (true) {

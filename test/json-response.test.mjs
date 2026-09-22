@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import {z} from 'zod';
 import {decodeModelJson} from '../server/json-response.mjs';
 import {Provider} from '../server/provider.mjs';
+import {importPreset} from '../server/presets.mjs';
+import {Store} from '../server/store.mjs';
+import {Engine} from '../server/engine.mjs';
 const profile={baseUrl:'https://example.test/v1',model:'test',apiKey:'',stream:false};
 const schema=z.object({text:z.string()});
 const response=content=>Response.json({choices:[{message:{content},finish_reason:'stop'}]});
@@ -34,4 +37,38 @@ test('结构错误、HTTP错误不作为语法重试，暂停后不再请求',as
   const controller=new AbortController();count=0;
   const paused=new Provider(async()=>{count++;controller.abort();return response('bad');});
   await assert.rejects(paused.json(profile,'任务',{},schema,{signal:controller.signal}),/暂停/);assert.equal(count,1);
+});
+
+test('两次失败保留任务、原因、模型响应和结束标记，并脱敏密钥',async()=>{
+  let count=0;const provider=new Provider(async()=>response(++count===1?'first private-secret':'{"text":"unterminated'));
+  await assert.rejects(provider.json({...profile,apiKey:'private-secret'},'原任务',{preset:null},schema),e=>{
+    assert.equal(e.details.kind,'model_json');assert.equal(e.details.task,'原任务');assert.equal(e.details.model,'test');assert.equal(e.details.attempts.length,2);
+    assert.equal(e.details.attempts[0].response,'first [已隐藏]');assert.match(e.details.attempts[0].reason,/没有找到 JSON/);
+    assert.equal(e.details.attempts[1].response,'{"text":"unterminated');assert.match(e.details.attempts[1].reason,/字符串未闭合/);
+    assert.equal(e.details.attempts[1].finishReason,'stop');assert.ok(!JSON.stringify(e.details).includes('private-secret'));return true;
+  });assert.equal(count,2);
+});
+test('输出正则破坏 JSON 时保留处理前后内容，显示规则名称',async()=>{
+  const preset=importPreset({name:'test-preset',prompts:[{identifier:'main',content:'test'}],extensions:{regex_scripts:[{scriptName:'移除括号',findRegex:'/[{}]/g',replaceString:'',placement:[2]}]}});
+  await assert.rejects(new Provider(async()=>response('{"text":"valid"}')).json(profile,'task',{preset},schema),e=>{
+    assert.deepEqual(e.details.outputRegexNames,['移除括号']);assert.equal(e.details.presetName,'test-preset');
+    assert.equal(e.details.attempts[0].originalResponse,'{"text":"valid"}');assert.equal(e.details.attempts[0].response,'"text":"valid"');assert.equal(e.details.attempts[0].regexChanged,true);return true;
+  });
+});
+test('过长错误响应保留首尾和原始长度；结构错误只有一次诊断',async()=>{
+  const long='START'+'x'.repeat(70000)+'END';
+  await assert.rejects(new Provider(async()=>response(long)).json(profile,'task',{},schema),e=>{
+    const a=e.details.attempts[0];assert.equal(a.truncated,true);assert.equal(a.responseLength,long.length);assert.ok(a.response.startsWith('START'));assert.ok(a.response.endsWith('END'));assert.ok(a.response.length<65000);return true;
+  });
+  await assert.rejects(new Provider(async()=>response('{"other":1}')).json(profile,'task',{},schema),e=>{assert.equal(e.details.attempts.length,1);assert.match(e.details.attempts[0].reason,/text/);return true;});
+});
+test('失败详情随故事保存，继续成功后清除旧详情且不变更失败检查点',async()=>{
+  const store=new Store(':memory:',{protect:async x=>x,unprotect:async x=>x});
+  try {
+    const p=await store.saveProfile({...profile,name:'test'}),s=store.create({name:'test',event:'event',textProfile:p.id,offline:true,protagonist:{}});
+    const engine=new Engine(store,new Provider(async()=>response('bad')));await engine.start(s.id);
+    const failed=store.story(s.id);assert.equal(failed.phase,'setup');assert.equal(failed.errorDetails.attempts.length,2);assert.equal(failed.status,'failed');
+    engine.provider=new Provider(async()=>response(JSON.stringify({title:'测试',kind:'其他',era:'现代',location:'城市',identity:'职员',goal:'生存',resources:'有限',assumptions:'假设'})));
+    await engine.start(s.id);const recovered=store.story(s.id);assert.equal(recovered.phase,'confirm');assert.equal(recovered.errorDetails,null);assert.equal(recovered.error,'');
+  } finally {store.close();}
 });

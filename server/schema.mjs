@@ -99,7 +99,7 @@ export function endingIssues(body, review) {
 export function parseJson(raw, schema) {
   const value = decodeModelJson(raw);
   const result = schema.safeParse(value);
-  if (!result.success) throw new Error(`模型结构不完整：${result.error.issues.slice(0, 3).map(i => i.path.join('.') + ' ' + i.message).join('；')}`);
+  if (!result.success) throw Object.assign(new Error(`模型结构不完整：${result.error.issues.slice(0, 3).map(i => i.path.join('.') + ' ' + i.message).join('；')}`),{code:'MODEL_JSON_SCHEMA'});
   return result.data;
 }
 // Add decimal JSON numbers without accumulating binary float drift (0.1 + 0.2).

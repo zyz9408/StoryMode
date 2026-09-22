@@ -57,6 +57,7 @@ export async function startMock(options = {}) {
     if(!input){res.statusCode=400;res.end(JSON.stringify({error:'No StoryMode task message'}));return;}
     if(options.delay)await new Promise(r=>setTimeout(r,options.delay));
     let value=input.task.startsWith('连接测试')?'连接成功':fixture(input.task,input.context,options);
+    if(body.model==='mock-invalid-json')value=input.context.jsonFormatRepair?'第二次响应：仍然没有 JSON 对象。':'第一次响应：这里是小说正文，并非 JSON。';
     if(typeof value==='string'&&input.task.startsWith('写本章第'))value=value.slice(0,Math.ceil(value.length/3));
     const content=typeof value==='string'?value:JSON.stringify(value);
     if(body.stream){

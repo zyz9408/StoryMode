@@ -3,7 +3,7 @@ const getRuntime = async () => (await import('./browser/runtime.mjs')).runtime()
 export async function api<T = unknown>(path:string,body?:unknown):Promise<T> {
   if(browserMode)return (await (await getRuntime()).request(path,body)).data as T;
   const r=await fetch('/api'+path,{method:body===undefined?'GET':'POST',headers:body===undefined?{}:{'Content-Type':'application/json','X-StoryMode':'1'},body:body===undefined?undefined:JSON.stringify(body)});
-  const value=await r.json();if(!r.ok)throw new Error(value.error||'请求失败');return value;
+  const value=await r.json();if(!r.ok)throw Object.assign(new Error(value.error||'请求失败'),{details:value.details});return value;
 }
 type Source = {onopen:(()=>void)|null;onerror:(()=>void)|null;onmessage:((event:{data:string})=>void)|null;close:()=>void};
 export function storyEvents(id:string):Source {

@@ -112,7 +112,7 @@ test('预设导入、条目开关、预览与当前故事启停持久化',async(
   await page.getByLabel('导入预设 JSON',{exact:true}).setInputFiles({name:'测试预设.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(preset))});
   await expect(page.getByRole('status')).toContainText('已导入 2 个条目');await expect(page.getByRole('checkbox',{name:'启用条目 测试文风',exact:true})).toBeChecked();
   await page.getByRole('button',{name:'保存并预览',exact:true}).click();await expect(page.locator('.preset-preview')).toContainText('将作为消息发送');
-  await page.getByRole('checkbox',{name:'启用条目 测试文风',exact:true}).uncheck();await page.getByRole('button',{name:'保存预设',exact:true}).click();await expect(page.getByRole('status')).toContainText('已保存');
+  await page.getByRole('tab',{name:'提示词',exact:true}).click();await page.getByRole('checkbox',{name:'启用条目 测试文风',exact:true}).uncheck();await page.getByRole('button',{name:'保存预设',exact:true}).click();await expect(page.getByRole('status')).toContainText('已保存');
   await page.getByRole('button',{name:'关闭',exact:true}).click();await page.reload();await page.getByRole('button',{name:'写作预设',exact:true}).click();
   await page.getByLabel('管理预设',{exact:true}).selectOption({label:'测试预设'});await expect(page.getByRole('checkbox',{name:'启用条目 测试文风',exact:true})).not.toBeChecked();
   await page.getByRole('checkbox',{name:'启用条目 测试文风',exact:true}).check();await page.getByRole('button',{name:'保存预设',exact:true}).click();await expect(page.getByRole('status')).toContainText('已保存');await page.getByRole('button',{name:'关闭',exact:true}).click();

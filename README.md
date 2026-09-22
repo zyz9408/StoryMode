@@ -100,7 +100,7 @@ npm start
 
 侧栏「写作预设」支持 SillyTavern Chat Completion JSON（`prompts` / `prompt_order`）。实现以本机 SillyTavern `8172dcd0ee672d3cd9a5e5f7af134f91a45cd2b8` 的 PromptManager、OpenAI 消息编排和 regex 引擎为对照。
 
-**添加正则**：打开「写作预设」，选择预设，在「正则脚本」点击「添加正则」，填写查找表达式（例如 `/旧词/g`）和替换内容，然后「保存预设」。可调整顺序、开关和应用范围，并单独导出正则 JSON。导入完整预设时自动读取内嵌正则并显示条数；「导入正则 JSON」也接受完整预设文件，只提取正则到当前预设，不改变提示词。兼容 `extensions.regex_scripts`、顶层 `regex_scripts` / `regexScripts` 及旧嵌套 `extensions.extensions.regex_scripts`。已保存的旧格式数据在读取时自动适配；手动清空的正则列表不会从旧扩展元数据中重新恢复。
+**添加正则**：打开「写作预设」，选择预设，切换到「正则」页后点击「添加正则」，填写查找表达式（例如 `/旧词/g`）和替换内容，然后「保存预设」。可调整顺序、开关和应用范围，并单独导出正则 JSON。导入完整预设时自动读取内嵌正则并显示条数；「导入正则 JSON」也接受完整预设文件，只提取正则到当前预设，不改变提示词。兼容 `extensions.regex_scripts`、顶层 `regex_scripts` / `regexScripts` 及旧嵌套 `extensions.extensions.regex_scripts`。已保存的旧格式数据在读取时自动适配；手动清空的正则列表不会从旧扩展元数据中重新恢复。
 
 **DeepSeek / HTTP 422**：负数 `seed` 是酒馆的随机种子哨兵值，发送时省略。连接 `api.deepseek.com` 或使用 `deepseek-chat` / `deepseek-reasoner` / `deepseek-flash` / `deepseek-vN` 名称的兼容接口时，不发送 DeepSeek 未声明的 `seed`、`top_k`、`top_a`、`min_p`、`repetition_penalty`、`verbosity`；OpenRouter 保留其扩展采样参数。只适配请求，不删除预设原值或正则。预览显示过滤说明。400/422 错误展示经脱敏、限长的字段诊断，不再只有状态码，也不会自动修改参数并重试。可在预设编辑器修改「最大输出 tokens」或清空以采用供应商默认值；不同模型和中转服务的限制以其错误说明为准，不统一把所有 DeepSeek 模型强制限为 8192。参考 [DeepSeek Chat Completions 文档](https://api-docs.deepseek.com/api/create-chat-completion/)。
 
@@ -115,6 +115,14 @@ npm start
 兼容边界：这不是整个 SillyTavern 运行时。酒馆助手 / SPreset / STscript / JavaScript 扩展仅保留数据，不执行；世界书关键词激活、全部新宏语法、模型专用 tokenizer 的上下文裁剪、供应商专用消息后处理和原生 Claude/Gemini 文字发送协议尚未移植。当前文字请求使用现有 OpenAI-compatible `chat/completions` 通道，HTML 替换结果仍作为文本显示，不运行网页。不能把此实现称为与所有酒馆扩展和供应商 100% 等价。UI 中会提示未知宏、无效正则及上下文裁剪差异。
 
 验证：`npm test` 包含消息编排、正则、参数、变量持久化、导出再导入、流式跨块和 API 测试。设置 `SILLYTAVERN_REFERENCE` 为酒馆源码目录，可额外运行直接调用该版本 regex 引擎与深度编排函数的差分测试；本机默认检查 `E:/SillyTavern-Launcher/SillyTavern`。测试仅读取源码，不连接模型、不复制用户预设入仓库。本地 UI 与 Pages 测试需串行运行（它们共用模拟供应商端口 3213）；未安装 Playwright 浏览器时可设置 `PLAYWRIGHT_CHANNEL=msedge` 使用已安装的 Edge。
+
+## 预设编辑器与错误详情
+
+预设管理分为「提示词」「正则」「参数」「发送预览」四页。提示词与正则采用列表 + 当前条目编辑，支持搜索和排序；正则高级配置折叠显示，可用示例文本测试当前规则。桌面分栏滚动，手机上下排列。编辑后会标记未保存，切换标签或预设时保留本次窗口内的草稿；关闭窗口前请保存。任何编辑都会使旧发送预览失效。
+
+当模型连续两次返回无法解析的 JSON，或返回了字段不符合要求的 JSON，错误卡片可展开「查看详细内容」：模型、预设、发生时间、任务要求、每次响应、解析失败原因和结束标记。若普通输出正则修改了响应，会额外显示规则名称和正则处理前的模型原文，以便对照实际解析内容。可复制或下载 JSON 诊断报告。错误详情随故事保存，刷新后保留；开始下一次生成时清除旧详情，需留档请先下载。旧版本的历史错误没有保存响应，不能恢复原文，需要重新尝试后才能获得新诊断。
+
+诊断不保存完整请求、鉴权头或连接密钥，已知密钥在记录中脱敏；每份响应最多保留首尾共 64,000 字符，超长明确标记省略，保留原始长度。详情中的内容仅作为文本展示，不作为 HTML 执行。增加诊断不会放宽 JSON 校验，也不会增加重试次数：语法错误最多请求两次，字段结构错误仍直接停止，已有故事检查点保持原有处理方式。
 
 ## 生成与阅读
 
