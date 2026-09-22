@@ -1,3 +1,4 @@
+import { decodeModelJson } from './json-response.mjs';
 import { scorecardSchema } from './scorecard.mjs';
 import { z } from 'zod';
 
@@ -96,9 +97,7 @@ export function endingIssues(body, review) {
   });
 }
 export function parseJson(raw, schema) {
-  const clean = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
-  let value;
-  try { value = JSON.parse(clean); } catch { throw new Error('模型返回了无效 JSON，请更换更可靠的模型或重试。'); }
+  const value = decodeModelJson(raw);
   const result = schema.safeParse(value);
   if (!result.success) throw new Error(`模型结构不完整：${result.error.issues.slice(0, 3).map(i => i.path.join('.') + ' ' + i.message).join('；')}`);
   return result.data;
