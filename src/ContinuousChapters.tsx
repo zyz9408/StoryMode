@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { Chapter, IllustrationJob } from './types';
+import { StoryContent } from './StoryContent';
 
 type Props = {
   chapters: Chapter[]; start: number; font: number; busy: boolean;
@@ -37,7 +38,7 @@ export function ContinuousChapters(props: Props) {
       <div className="chapter-title"><div className="eyebrow">CHAPTER {String(chapter.number).padStart(2, '0')}</div><h2>{chapter.title}</h2><span>—</span></div>
       {chapter.image && <img className="chapter-image" src={chapter.image} alt={`第${chapter.number}章：${chapter.title}插图`}/>}
       {props.illustrations.filter(j => j.target === String(chapter.number) && j.status !== 'completed').map(j => <div className="image-progress" key={j.target} role="status">{j.status === 'pending' ? '插图排队中，正文可正常阅读' : j.status === 'running' ? '正在自动生成本章插图…' : <>{j.error || '插图尚未完成'} <button className="text-link" onClick={() => props.onImage(chapter.number)}>重试插图</button></>}</div>)}
-      <div className="prose" style={{ fontSize: font }}>{(chapter.displayBody??chapter.body).split(/\n+/).filter(Boolean).map((p, i) => <p key={i}>{p}</p>)}</div>
+      <div className="prose" style={{ fontSize: font }}><StoryContent text={chapter.displayBody??chapter.body} fontSize={font} title={`第 ${chapter.number} 章样式`}/></div>
       <div className="chapter-end">· 第 {chapter.number} 章 终 ·</div>
       {chapter.number < chapters.length && <div className="next-chapter-divider">继续向下阅读 · 第 {chapter.number + 1} 章</div>}
     </section>)}

@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@fastify/static": "^10.1.4",
+    "dompurify": "3.4.15",
     "fastify": "^5.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
