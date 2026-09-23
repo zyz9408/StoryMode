@@ -1,3 +1,4 @@
+import { answerText, emptyAnswerError } from './model-text.mjs';
 import { fromBase64, toBase64, concatBytes } from './bytes.mjs';
 import { parseJson } from './schema.mjs';
 import { resolvePreset } from './presets.mjs';
@@ -105,8 +106,8 @@ export class Provider {
   async text(profile, task, context, options = {}) {
     try { return await this.textOnce(profile,task,context,options); }
     catch(error) {
-      if(options.signal?.aborted || profile.stream===false || error.code!=='STREAM_INCOMPLETE')throw error;
-      options.onFallback?.();
+      if(options.signal?.aborted || !(error.code==='MODEL_EMPTY_RESPONSE' || (profile.stream!==false && error.code==='STREAM_INCOMPLETE')))throw error;
+      if(error.code==='STREAM_INCOMPLETE')options.onFallback?.();
       // A fresh complete response replaces the draft; never concatenate the
       // broken stream with the replacement or emit duplicate token callbacks.
       return this.textOnce({...profile,stream:false},task,context,{...options,onToken:options.onToken?()=>{}:undefined});
@@ -123,11 +124,14 @@ export class Provider {
     if (!(r.headers.get('content-type') || '').includes('text/event-stream')) {
       let data; try { data = await r.json(); } catch { throw new Error('接口返回无效 JSON 或连接中断'); }
       if (data.choices?.[0]?.finish_reason === 'length') throw new Error('模型输出被截断，请提高供应商输出上限或更换模型');
-      const content = data.choices?.[0]?.message?.content;
-      if (typeof content !== 'string' || !content.trim()) throw new Error('模型未返回文本，请检查模型是否支持 Chat Completions');
-      const result = transform(content); onResponse?.({originalResponse:content,response:result,finishReason:data.choices?.[0]?.finish_reason});onToken?.(result); return result;
+      if(data.error)throw new Error('供应商返回错误响应，未提供正文，请检查模型连接后重试');
+      const choice=data.choices?.[0],message=choice?.message||{};
+      if(!choice)throw new Error('供应商响应缺少 choices，无法读取正文，请检查 Base URL 与接口协议是否匹配');
+      const content=answerText(message.content)||answerText(choice.text);
+      if(message.refusal || choice.finish_reason==='content_filter' || !content.trim())throw emptyAnswerError({message,finishReason:choice.finish_reason});
+      const result = transform(content); if(!result.trim())throw new Error('正文被预设正则处理为空，请检查修改文本的正则规则后继续');onResponse?.({originalResponse:content,response:result,finishReason:data.choices?.[0]?.finish_reason});onToken?.(result); return result;
     }
-    let buffer = '', result = '', complete = false, truncated = false, finishReason;
+    let buffer = '', result = '', complete = false, truncated = false, finishReason, hasReasoning=false, hasTools=false, hasRefusal=false;
     const decoder = new TextDecoder();
     const consume = line => {
       if (!line.startsWith('data:')) return;
@@ -140,8 +144,11 @@ export class Provider {
       if(choice?.finish_reason)finishReason=choice.finish_reason;
       if (choice?.finish_reason === 'length') truncated = true;
       if (choice?.finish_reason === 'stop') complete = true;
-      const token = choice?.delta?.content;
-      if (typeof token === 'string') { result += token; emit(token); }
+      const message=choice?.delta||choice?.message||{};
+      hasReasoning ||= !!(message.reasoning_content||message.reasoning||message.thinking||(Array.isArray(message.content)&&message.content.some(p=>p?.thought||['thinking','reasoning'].includes(p?.type))));
+      hasTools ||= !!(message.tool_calls?.length||message.function_call);hasRefusal ||= !!message.refusal || (Array.isArray(message.content)&&message.content.some(p=>p?.type==='refusal'));
+      const token=answerText(message.content)||answerText(choice?.text);
+      if(token){result+=token;emit(token);}
     };
     try {
       for await (const chunk of r.body) {
@@ -156,11 +163,13 @@ export class Provider {
       if(e.message?.startsWith('供应商'))throw e;
       throw Object.assign(new Error('流式连接中断，已保留草稿，请重试'),{code:'STREAM_INCOMPLETE'});
     }
+    if(!truncated && (hasRefusal || finishReason==='content_filter' || (complete&&!result.trim())))throw emptyAnswerError({finishReason,hasReasoning,hasTools,hasRefusal});
     if (!complete || truncated || !result.trim()) {
       if (bufferOutput && result) onToken?.(transform(result));
       throw Object.assign(new Error(truncated ? '模型输出达到上限被截断，请更换模型或调整供应商上限' : '流式响应未完整结束，已保留草稿；可关闭模型配置中的流式输出后继续'),{code:!truncated&&!complete?'STREAM_INCOMPLETE':'MODEL_OUTPUT_INCOMPLETE'});
     }
     const output = transform(result);
+    if(!output.trim())throw new Error('正文被预设正则处理为空，请检查修改文本的正则规则后继续');
     onResponse?.({originalResponse:result,response:output,finishReason});
     if (bufferOutput) onToken?.(output);
     return output;
