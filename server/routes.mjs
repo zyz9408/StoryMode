@@ -40,6 +40,19 @@ export function registerRoutes(app, { store, engine, provider, imagery, storyLoc
     if (!store.preset(req.params.id)) throw new Error('预设不存在');
     const preset = presetSchema.parse({ ...req.body, id:req.params.id }); return store.savePreset(preset);
   });
+  app.post('/api/presets/:id/delete', async req => {
+    const id=req.params.id;
+    z.object({confirm:z.literal(true)}).parse(req.body);
+    if(!store.preset(id))throw new Error('预设不存在');
+    const affected=store.listStories(true).filter(s=>s.presetId===id);
+    if(affected.some(s=>engine.jobs.has(s.id)||storyLocks.has(s.id)))throw new Error('有故事正在使用此预设生成，请先暂停该故事再删除');
+    for(const s of affected)storyLocks.add(s.id);
+    try {
+      await store.deletePreset(id);
+      for(const s of affected)engine.emit(s.id,{type:'state'});
+      return {ok:true};
+    } finally {for(const s of affected)storyLocks.delete(s.id);}
+  });
   app.post('/api/presets/:id/preview', async req => {
     const preset = store.preset(req.params.id); if (!preset) throw new Error('预设不存在');
     const { storyId, task, json } = z.object({ storyId:z.string().optional(), task:z.string().default(chapterTask), json:z.boolean().default(false) }).parse(req.body || {});

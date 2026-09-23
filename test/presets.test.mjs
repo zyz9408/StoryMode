@@ -46,7 +46,7 @@ test('正文保留预设角色、顺序及参数，结构化任务不携带写�
   await provider.text(profile,'写完整一章',{preset,player:'玩家'});
   let body=mock.calls.at(-1).body,input=JSON.parse(body.messages.find(m=>m.role==='user').content);
   assert.equal(body.temperature,1.08);assert.equal(body.max_tokens,10);assert.equal(body.web_search_options,undefined);assert.equal(body.tools,undefined);
-  assert.equal(input.creativePreset,undefined);assert.equal(input.context.preset,undefined);assert.deepEqual(body.messages.at(-1),{role:'assistant',content:'助手参考文本'});
+  assert.equal(input.creativePreset,undefined);assert.equal(input.context.preset,undefined);assert.deepEqual(body.messages.at(-2),{role:'assistant',content:'助手参考文本'});assert.equal(body.messages.at(-1).role,'user');
   await provider.text(profile,'审核',{preset},{json:true});body=mock.calls.at(-1).body;
   assert.equal(body.temperature,undefined);assert.equal(body.max_tokens,undefined);assert.match(body.messages[0].content,/JSON 对象/);assert.deepEqual(body.messages.map(m=>m.role),['system','user']);assert.ok(!JSON.stringify(body).includes('助手参考文本'));
   await provider.text(profile,'写完整一章',{preset:null});assert.equal(JSON.parse(mock.calls.at(-1).body.messages.at(-1).content).creativePreset,undefined);
@@ -63,7 +63,7 @@ test('预设API导入、编辑、预览、故事启停、导出与SQLite重启�
   assert.equal(store.activePreset(store.story(s.id)).id,p.id);
   const preview=await post(`/api/presets/${p.id}/preview`,{storyId:s.id});assert.equal(preview.statusCode,200);assert.match(preview.json().messages[0].content,/角色/);
   p.entries[0].enabled=false;assert.equal((await post(`/api/presets/${p.id}`,p)).statusCode,200);
-  const savedPreview=(await post(`/api/presets/${p.id}/preview`,{})).json();assert.equal(savedPreview.messages.at(-1).role,'assistant');assert.ok(!savedPreview.messages.some(m=>m.content.includes('写紧凑的叙事')));assert.deepEqual(savedPreview.request.messages,savedPreview.messages);
+  const savedPreview=(await post(`/api/presets/${p.id}/preview`,{})).json();assert.equal(savedPreview.messages.at(-2).role,'assistant');assert.equal(savedPreview.messages.at(-1).role,'user');assert.ok(!savedPreview.messages.some(m=>m.content.includes('写紧凑的叙事')));assert.deepEqual(savedPreview.request.messages,savedPreview.messages);
   const structuredPreview=await post(`/api/presets/${p.id}/preview`,{json:true,task:'返回 JSON 大纲'});assert.equal(structuredPreview.statusCode,200);assert.deepEqual(structuredPreview.json().messages.map(m=>m.role),['system','user']);assert.match(structuredPreview.json().warnings.join(''),/不应用写作预设/);
   await post(`/api/stories/${s.id}/preset`,{presetId:p.id,presetEnabled:false});assert.equal(store.activePreset(store.story(s.id)),null);
   const exported=await app.inject(`/api/presets/${p.id}/export`);assert.equal(exported.statusCode,200);assert.equal(JSON.parse(exported.body).entries[0].enabled,false);
@@ -128,4 +128,21 @@ test('SQLite 与浏览器旧存档读取时恢复内嵌正则，清空并保存�
     const cleared={...store.preset(legacy.id),regexScripts:[]};store.savePreset(cleared);browser.data.presets.set(legacy.id,cleared);
     assert.deepEqual(store.preset(legacy.id).regexScripts,[]);assert.deepEqual(browser.preset(legacy.id).regexScripts,[]);
   } finally {store.close();}
+});
+
+
+test('删除预设需确认、拒绝生成中删除，解绑关联故事而保留其他预设',async t=>{
+  const dir=mkdtempSync(resolve(tmpdir(),'storymode-delete-preset-'));
+  const store=new Store(':memory:'),app=await buildApp({store,dataDir:dir,serveStatic:false});
+  t.after(async()=>{await app.close();rmSync(dir,{recursive:true,force:true});});
+  const p=store.savePreset(importPreset(source)),other=store.savePreset(importPreset(source));
+  const story=store.create({name:'测试',event:'测试',presetId:p.id,presetEnabled:true});
+  const post=payload=>app.inject({method:'POST',url:`/api/presets/${p.id}/delete`,payload,headers:{'x-storymode':'1'}});
+  assert.equal((await post({})).statusCode,400);assert.ok(store.preset(p.id));
+  app.engine.jobs.set(story.id,{});
+  try{assert.equal((await post({confirm:true})).statusCode,400);}finally{app.engine.jobs.delete(story.id);}
+  assert.equal((await post({confirm:true})).statusCode,200);
+  assert.equal(store.preset(p.id),null);assert.ok(store.preset(other.id));
+  assert.equal(store.story(story.id).presetId,'');assert.equal(store.story(story.id).presetEnabled,false);
+  assert.equal(store.story(story.id).event,'测试');
 });

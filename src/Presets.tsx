@@ -24,6 +24,9 @@ export function PresetManager({presets,story,refresh,refreshStory}:{presets:Pres
   const changeEntry=(index:number,patch:Partial<PresetEntry>)=>{if(draft)update({...draft,entries:draft.entries.map((e,i)=>i===index?{...e,...patch}:e)});};
   const move=(index:number,step:number)=>{if(!draft)return;setSelected(draft.entries[index].identifier);const entries=[...draft.entries];[entries[index],entries[index+step]]=[entries[index+step],entries[index]];update({...draft,entries});};
   const save=async()=>{if(draft){const saved=await request<Preset>(`/presets/${id}`,draft);edits.current.delete(id);setDraft(saved);await refresh();return saved;}};
+  const remove=()=>{if(!draft||!window.confirm(`确定删除预设“${draft.name}”及其中全部正则？关联故事将停用此预设，已生成正文保留。此操作不可撤销。`))return;void act(async()=>{
+    await request(`/presets/${id}/delete`,{confirm:true});edits.current.delete(id);setDraft(null);setPreview(null);setEnabled(false);setId(presets.find(p=>p.id!==id)?.id||'');await refresh();await refreshStory();setMessage('预设已删除，关联故事已停用此预设。');
+  });};
   const selectedIndex=draft?Math.max(0,draft.entries.findIndex(e=>e.identifier===selected)):0;
   const entry=draft?.entries[selectedIndex];
   const setParameter=(key:string,value:string)=>{if(!draft)return;const parameters={...draft.parameters};if(!value)delete parameters[key];else parameters[key]=Number(value);update({...draft,parameters});};
@@ -31,6 +34,7 @@ export function PresetManager({presets,story,refresh,refreshStory}:{presets:Pres
     <div className="preset-toolbar">
       <label>管理预设<select aria-label="管理预设" value={id} disabled={busy} onChange={e=>setId(e.target.value)}><option value="">请选择预设</option>{presets.map(p=><option key={p.id} value={p.id}>{p.name}{edits.current.has(p.id)?' · 未保存':''}</option>)}</select></label>
       <label className="preset-import">导入预设 JSON<input aria-label="导入预设 JSON" type="file" accept=".json,application/json" disabled={busy} onChange={e=>{const file=e.target.files?.[0];if(!file)return;e.target.value='';void act(async()=>{const p=await request<Preset>('/presets/import',{source:await file.text(),filename:file.name});await refresh();setId(p.id);setTab('提示词');setMessage(`已导入 ${p.entries.length} 个条目，自动读取 ${p.regexScripts?.length||0} 条正则，尚未启用到故事。`);});}}/></label>
+      <button type="button" className="secondary" disabled={busy||!draft} onClick={remove}>删除预设</button>
     </div>
     {error&&<p role="alert" className="notice danger">{error}</p>}{message&&<p role="status" className="notice">{message}</p>}
     {!draft?<div className="editor-empty"><h3>从一个预设开始</h3><p>导入 SillyTavern 预设 JSON，提示词与内嵌正则会一起读取。导入后可在这里分别管理。</p></div>:<fieldset disabled={busy}>

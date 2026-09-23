@@ -51,6 +51,14 @@ export class Store {
   presets() { return this.db.prepare('SELECT data FROM presets').all().map(r => presetSchema.parse(JSON.parse(r.data))); }
   preset(id) { const row = this.db.prepare('SELECT data FROM presets WHERE id=?').get(id); return row ? presetSchema.parse(JSON.parse(row.data)) : null; }
   savePreset(preset) { this.db.prepare('INSERT INTO presets VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data').run(preset.id, JSON.stringify(preset)); return preset; }
+  deletePreset(id) {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      for(const s of this.listStories(true))if(s.presetId===id){s.presetId='';s.presetEnabled=false;this.saveStory(s);}
+      this.db.prepare('DELETE FROM presets WHERE id=?').run(id);
+      this.db.exec('COMMIT');
+    } catch(e){this.db.exec('ROLLBACK');throw e;}
+  }
   activePreset(s) { return s.presetEnabled && s.presetId ? this.preset(s.presetId) : null; }
   globalVariables() { return this._globalVariables ||= JSON.parse(this.db.prepare("SELECT data FROM app_preferences WHERE id='macroGlobals'").get()?.data || '{}'); }
   saveGlobalVariables() { if(this._globalVariables) this.db.prepare("INSERT INTO app_preferences VALUES('macroGlobals',?) ON CONFLICT(id) DO UPDATE SET data=excluded.data").run(JSON.stringify(this._globalVariables)); }

@@ -80,5 +80,12 @@ export function registerRegexUiTest() {
     await editor.getByRole('button',{name:'添加正则',exact:true}).click();
     await editor.getByRole('button',{name:'删除当前正则',exact:true}).click();
     await expect(editor.getByRole('heading',{name:'暂无正则'})).toBeVisible();
+    page.once('dialog',dialog=>dialog.dismiss());await page.getByRole('button',{name:'删除预设',exact:true}).click();
+    await expect(page.getByLabel('预设名称',{exact:true})).toHaveValue('正则测试');
+    page.once('dialog',dialog=>dialog.accept());await page.getByRole('button',{name:'删除预设',exact:true}).click();
+    await expect(page.getByRole('status')).toContainText('预设已删除');
+    await expect(page.getByRole('heading',{name:'从一个预设开始'})).toBeVisible();
+    await page.reload();await page.getByRole('button',{name:'写作预设',exact:true}).click();
+    await expect(page.getByLabel('管理预设',{exact:true}).locator('option')).toHaveCount(1);
   });
 }

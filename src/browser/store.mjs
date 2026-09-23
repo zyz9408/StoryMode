@@ -52,6 +52,12 @@ export class BrowserStore {
   presets() { return [...this.data.presets.values()].map(p=>presetSchema.parse(clone(p))); }
   preset(id) { const p=this.data.presets.get(id);return p?presetSchema.parse(clone(p)):null; }
   savePreset(p) { this.put('presets',p.id,p);return p; }
+  async deletePreset(id) {
+    const changes=[['presets',id,undefined]];
+    for(const s of this.listStories(true))if(s.presetId===id){s.presetId='';s.presetEnabled=false;s.updated=new Date().toISOString();changes.push(['stories',s.id,s]);}
+    await this.write(changes);
+    for(const [table,key,value]of changes){if(value===undefined)this.data[table].delete(key);else this.data[table].set(key,clone(value));}
+  }
   activePreset(s) { return s.presetEnabled?this.preset(s.presetId):null; }
   globalVariables() { return this._globalVariables ||= clone(this.data.preferences.get('macroGlobals')) || {}; }
   saveGlobalVariables() { if(this._globalVariables) this.put('preferences','macroGlobals',this._globalVariables); }
