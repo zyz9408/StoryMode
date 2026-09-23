@@ -1,7 +1,7 @@
 import { settleScorecard } from './scorecard.mjs';
 import { recoverEndingEvidence, endingLabels, supplementEnding } from './ending-evidence.mjs';
 import { EventEmitter } from './events.mjs';
-import { setupSchema, outlineSchema, reoutlineSchema, rewriteReviewSchema, reviewSchemaFor, evaluationSchema, countWords, validateTransition, settleResources, resourceIssues, resourceRepairSchema, narrativeIssues, endingIssues } from './schema.mjs';
+import { setupSchema, outlineSchema, reoutlineSchema, rewriteReviewSchema, reviewSchemaFor, evaluationSchema, countWords, storyProse, validateTransition, settleResources, resourceIssues, resourceRepairSchema, narrativeIssues, endingIssues } from './schema.mjs';
 import { setupTask, outlineTask, chapterTask, reviewTask, evaluationTask, rewriteTask, rewriteReviewTask, pacing, endingPolicy, completeEndingTask } from './prompts.mjs';
 
 export class Engine extends EventEmitter {
@@ -41,10 +41,11 @@ export class Engine extends EventEmitter {
       sources: s.sources,
       world: s.world, outline: s.outline, regeneration: s.regeneration,
       summaries: chapters.map((c, i) => ({ number: c.number, title: c.title, summary: c.summary.slice(0, i >= chapters.length - 3 ? 1200 : 500) })),
-      recentProse: chapters.at(-1)?.body.slice(-5000) || '', decisions: s.decisions,
+      recentProse: storyProse(chapters.at(-1)?.body || '').slice(-5000), decisions: s.decisions,
     };
   }
   async settleReview(s, review, body, profile, signal, original = null) {
+    body = storyProse(body);
     review = settleResources(s.world, review);
     for (let attempt = 0; ; attempt++) {
       this.guard(signal);
@@ -125,9 +126,9 @@ export class Engine extends EventEmitter {
       while (true) {
         s.progress = `第 ${number} 章：检查字数、因果与资源${d.repairs ? `（修订 ${d.repairs}/2）` : ''}`;
         this.checkpoint(s, signal);
-        review = await json(reviewTask, { ...this.context(s), number, isDecision, allowDecision, title: d.plan.title, body: d.body }, reviewSchemaFor(s.world));
+        review = await json(reviewTask, { ...this.context(s), number, isDecision, allowDecision, title: d.plan.title, body: storyProse(d.body) }, reviewSchemaFor(s.world));
         review = await this.settleReview(s, review, d.body, profile, signal);
-        review = await recoverEndingEvidence(this.provider, profile, d.body, review, signal);
+        review = await recoverEndingEvidence(this.provider, profile, storyProse(d.body), review, signal);
         this.guard(signal);
         const issues = [...validateTransition(s.world, review, number), ...narrativeIssues(d.body), ...endingIssues(d.body, review)];
         if (terminal && !review.finished) issues.push('已到计划终章，必须写完整人生、组织及时代终局，不能再扩展后续大纲');
@@ -208,11 +209,11 @@ export class Engine extends EventEmitter {
         this.guard(signal); d.body = body.trim(); d.partial = ''; this.checkpoint(s, signal);
       }
       s.progress = `第 ${d.number} 章：检查重写与前后剧情是否一致`; this.checkpoint(s, signal);
-      let review = await this.provider.json(profile, rewriteReviewTask, { ...ctx, body: d.body }, rewriteReviewSchema, { signal });
+      let review = await this.provider.json(profile, rewriteReviewTask, { ...ctx, body: storyProse(d.body) }, rewriteReviewSchema, { signal });
       this.guard(signal);
       d.issues = [...review.issues, ...narrativeIssues(d.body)];
       if (original.ending) {
-        review = await recoverEndingEvidence(this.provider, profile, d.body, { ...review, finished:true }, signal);
+        review = await recoverEndingEvidence(this.provider, profile, storyProse(d.body), { ...review, finished:true }, signal);
         this.guard(signal);
         d.issues.push(...endingIssues(d.body, review));
       }
@@ -250,10 +251,10 @@ export class Engine extends EventEmitter {
         this.guard(signal); d.body = body.trim(); d.partial = ''; this.checkpoint(s, signal);
       }
       s.progress = '审核终局的人物命运、时代结局和后人评价'; this.checkpoint(s, signal);
-      let review = await this.provider.json(profile, reviewTask + '这是对原结尾的补全：原章事件必须保留。world以原章结束为起点，resourceChanges仅记录新增的后半生及时代变迁，不要重复扣除原章已发生的消耗。', { ...ctx, body: d.body }, reviewSchemaFor(s.world), { signal });
+      let review = await this.provider.json(profile, reviewTask + '这是对原结尾的补全：原章事件必须保留。world以原章结束为起点，resourceChanges仅记录新增的后半生及时代变迁，不要重复扣除原章已发生的消耗。', { ...ctx, body: storyProse(d.body) }, reviewSchemaFor(s.world), { signal });
       this.guard(signal);
       review = await this.settleReview(s, review, d.body, profile, signal, original);
-      review = await recoverEndingEvidence(this.provider, profile, d.body, review, signal);
+      review = await recoverEndingEvidence(this.provider, profile, storyProse(d.body), review, signal);
       d.issues = [...validateTransition(s.world, review, d.number), ...narrativeIssues(d.body), ...endingIssues(d.body, review)];
       if (!review.finished || review.remaining.length || review.decision) d.issues.push('终局必须完成，不能留下后续大纲或待定选择');
       const words = countWords(d.body);

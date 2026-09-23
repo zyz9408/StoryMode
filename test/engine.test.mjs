@@ -21,7 +21,7 @@ async function harness(t,options={}) {
   return {mock,store,engine,id:s.id};
 }
 async function finish(h) {
-  await h.engine.start(h.id);
+  if(h.store.story(h.id).status!=='waiting_decision')await h.engine.start(h.id);
   while(h.store.story(h.id).status==='waiting_decision') {
     const s=h.store.story(h.id), d=s.pendingDecision;
     s.decisions.push({chapter:d.chapter,question:d.question,choice:d.options[0]});s.pendingDecision=null;s.status='generating';h.store.saveStory(s);await h.engine.start(s.id);
@@ -292,4 +292,13 @@ test('补全终局审核失败时原末章、评价与资源状态全部保留',
   s.rewrite={mode:'ending',number:15,body:'',partial:'',repairs:0,issues:[]};h.store.saveStory(s);
   await h.engine.start(h.id);const after=h.store.story(h.id);
   assert.equal(after.status,'failed');assert.equal(after.rewrite.repairs,2);assert.deepEqual(after.world,s.world);assert.deepEqual(after.evaluation,s.evaluation);assert.deepEqual(h.store.chapters(h.id),before);
+});
+
+
+test('带规划标签的章节正常完成，审核仅收到正文而存档保留标签',async t=>{
+  const h=await harness(t,{ending:2,noDecisions:true,wrappedPlanning:true});await finish(h);
+  assert.equal(h.store.story(h.id).status,'completed',h.store.story(h.id).error);
+  assert.match(h.store.chapters(h.id)[0].body,/<konatan_planning~/);
+  const calls=h.mock.calls.filter(c=>c.body.messages).map(c=>JSON.parse(c.body.messages.at(-1).content));
+  for(const call of calls.filter(c=>c.task.startsWith('严格审核')))assert.ok(!call.context.body.includes('konatan_planning'));
 });

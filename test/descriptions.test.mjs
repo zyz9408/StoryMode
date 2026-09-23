@@ -74,3 +74,17 @@ test('缺失冲突字段错误可恢复，保留草稿正文及所有已提交�
     assert.equal(restored.status,'paused');assert.equal(restored.error,'');assert.deepEqual(restored.draft,s.draft);assert.deepEqual(restored.world,s.world);assert.equal(store.chapters(s.id).length,1);
   }finally{store.close();rmSync(dir,{recursive:true,force:true});}
 });
+
+
+test('完整规划与吐槽标签不参与正文指代、字数及终局证据检查，标签外仍严格校验',async()=>{
+  const {storyProse,narrativeIssues,countWords,endingIssues}=await import('../server/schema.mjs');
+  const planning='<konatan_planning~>本章承接上一章，下一章改变场景。</konatan_planning~><tucao>本章已完成</tucao>';
+  const body=planning+'此前，他已来到衡阳。';
+  assert.equal(storyProse(body),'此前，他已来到衡阳。');assert.deepEqual(narrativeIssues(body),[]);
+  assert.equal(countWords(body),countWords('此前，他已来到衡阳。'));
+  for(const raw of [planning+'上一章他来到衡阳。','<konatan_planning~>上一章','<div>上一章</div>'])assert.ok(narrativeIssues(raw).length);
+  const quote='旅人年老病逝，留下产业由女儿继承。';
+  const ending=Object.fromEntries(['protagonistDeath','keyPeopleFates','organizationFates','eraClosure','posterity'].map(k=>[k,quote]));
+  assert.equal(endingIssues('<tucao>'+quote+'</tucao>正文另述。',{finished:true,ending}).length,5);
+  assert.equal(endingIssues(planning+quote,{finished:true,ending}).length,0);
+});

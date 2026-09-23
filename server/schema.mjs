@@ -83,9 +83,14 @@ export const evaluationSchema = z.object({
     if (!v.dimensions.some(d => d.name === name)) ctx.addIssue({ code: 'custom', message: `评价缺少${name}` });
   }
 });
-export function countWords(s) { return [...s].filter(c => /[\p{L}\p{N}]/u.test(c)).length; }
+export function storyProse(body) {
+  // Only complete, explicitly recognised non-story blocks are excluded.
+  // Keep the stored response untouched for preset display and export.
+  return body.replace(/<(konatan_planning~|tucao|think|thinking|analysis|planning)\s*>[\s\S]*?<\/\1\s*>/gi, '');
+}
+export function countWords(s) { return [...storyProse(s)].filter(c => /[\p{L}\p{N}]/u.test(c)).length; }
 export function narrativeIssues(body) {
-  const references = [...new Set(body.match(/上一章|下一章|前一章|后一章|本章(?!程)/g) || [])];
+  const references = [...new Set(storyProse(body).match(/上一章|下一章|前一章|后一章|本章(?!程)/g) || [])];
   return references.length ? [`正文出现跳出故事的章节指代：${references.join('、')}。改为人物能感知的时间或事件衔接（例如此前、昨日、那次交易之后），不得改变事实和数字；资源核算留在世界状态中。`] : [];
 }
 export function endingIssues(body, review) {
@@ -93,7 +98,7 @@ export function endingIssues(body, review) {
   const labels = { protagonistDeath: '主角晚年、死亡时间与死因', keyPeopleFates: '重要人物最终命运', organizationFates: '主要组织与势力最终归宿', eraClosure: '时代结束及后继秩序', posterity: '同时代及后世评价' };
   return Object.entries(labels).flatMap(([key, label]) => {
     const evidence = review.ending?.[key]?.trim();
-    return evidence && evidence.length >= 8 && body.includes(evidence) ? [] : [`终局缺少可核对的${label}。须在正文明确写出，并在ending.${key}逐字摘录对应正文作为依据；不能以阶段胜利或未来展望代替。`];
+    return evidence && evidence.length >= 8 && storyProse(body).includes(evidence) ? [] : [`终局缺少可核对的${label}。须在正文明确写出，并在ending.${key}逐字摘录对应正文作为依据；不能以阶段胜利或未来展望代替。`];
   });
 }
 export function parseJson(raw, schema) {

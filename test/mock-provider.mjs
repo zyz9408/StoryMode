@@ -27,7 +27,7 @@ export function fixture(task, ctx, options = {}) {
   }
   if(task.startsWith('根据实际完成章节')) return { scorecard:{title:'有限资源生存家',summary:'没能改写天下，至少把日子过明白了。',cards:['主角','势力','朋友','对手','时代影响'].map((category,i)=>({category,name:'旅人与商队',opponentOutcomeScore:category==='对手'?35:null,score:80-i*5,title:'精打细算的一生',comment:'付出饮料换取情报，守住有限物资。',chapters:[options.badCitation?31:1]}))}, conclusion:'测试结局：在有限资源下落脚，未改变整体历史格局。', dimensions:dimensionNames.map(name=>({name,assessment:'基于第一章有限物资交换行为评价，结局属于推演。',chapters:[options.badCitation?31:1]})), uncertainties:'模拟测试数据；不构成历史考据或文学质量示例。' };
   // Deliberately mechanical text for control-flow tests, never shipped as a story.
-  return (options.metaAlways || (options.metaFirstDraft && task.startsWith('写完整一章')) ? '【上一章累计消耗：1瓶。】\n' : '') + Array.from({length:64},(_,i)=>`这是自动测试段落${i}。旅人清点瓶数，向车夫询问道路与价格。他无法越过守门人的盘问，只能先付出一瓶饮料换取消息，再决定下一步行动。`).join('\n\n') + (ctx.number===ending || ctx.original?.finished ? '\n\n'+Object.values(endingEvidence).join('\n\n') : '');
+  return (options.wrappedPlanning ? '<konatan_planning~>本章、上一章、下一章的场景安排。</konatan_planning~><tucao>本章完成。</tucao>\n' : '') + (options.metaAlways || (options.metaFirstDraft && task.startsWith('写完整一章')) ? '【上一章累计消耗：1瓶。】\n' : '') + Array.from({length:64},(_,i)=>`这是自动测试段落${i}。旅人清点瓶数，向车夫询问道路与价格。他无法越过守门人的盘问，只能先付出一瓶饮料换取消息，再决定下一步行动。`).join('\n\n') + (ctx.number===ending || ctx.original?.finished ? '\n\n'+Object.values(endingEvidence).join('\n\n') : '');
 }
 export const pixel = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j9ioAAAAASUVORK5CYII=';
 export async function startMock(options = {}) {
