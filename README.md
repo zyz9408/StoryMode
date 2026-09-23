@@ -104,6 +104,7 @@ npm start
 
 **DeepSeek / HTTP 422**：负数 `seed` 是酒馆的随机种子哨兵值，发送时省略。连接 `api.deepseek.com` 或使用 `deepseek-chat` / `deepseek-reasoner` / `deepseek-flash` / `deepseek-vN` 名称的兼容接口时，不发送 DeepSeek 未声明的 `seed`、`top_k`、`top_a`、`min_p`、`repetition_penalty`、`verbosity`；OpenRouter 保留其扩展采样参数。只适配请求，不删除预设原值或正则。预览显示过滤说明。400/422 错误展示经脱敏、限长的字段诊断，不再只有状态码，也不会自动修改参数并重试。可在预设编辑器修改「最大输出 tokens」或清空以采用供应商默认值；不同模型和中转服务的限制以其错误说明为准，不统一把所有 DeepSeek 模型强制限为 8192。参考 [DeepSeek Chat Completions 文档](https://api-docs.deepseek.com/api/create-chat-completion/)。
 
+- 如果预设编排使最后一个有效对话轮次为 assistant，发送前追加一条 user 续写指令，以兼容拒绝模型末轮的接口。原预设和消息顺序保留，请求预览中可查看适配提示。
 - `system`、`user`、`assistant` 条目直接成为请求里的消息，不再嵌入 `creativePreset`。保留编排开关、深度、优先级、触发类型及禁止覆盖设置；同深度的优先级和角色分组按参考版本处理。
 - 导入后选择预设并启用。预设用于正文生成、修订、重写和终局写作。开局解析、大纲、重新规划、审核、资源修复和评价等 JSON 任务使用独立的结构化规划与校验提示词，不携带写作预设、对话角色历史、预设采样参数、停止词、宏或正则；仍保留任务所需的事实上下文（前文摘要、世界状态、玩家决定、重生成要求）。格式修复重试也遵守此隔离。连接测试、主题推荐、生图和独立联网接口不携带故事预设。
 - 角色、性格、情景、世界信息和历史占位由 StoryMode 上下文填充。已有章节作为 assistant 历史，玩家决策作为 user 历史。当前任务作为 user 消息；没有启用 `chatHistory` 的简化预设会在末尾附加历史及任务，预览会提示这个适配行为。

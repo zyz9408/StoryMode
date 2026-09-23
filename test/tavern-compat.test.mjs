@@ -71,9 +71,9 @@ test('markers expand real context and history at the ordered position; no creati
   const p=importPreset({new_chat_prompt:'START',wi_format:'WORLD:{0}',prompts:[{identifier:'worldInfoBefore',marker:true},{identifier:'chatHistory',marker:true},{identifier:'tail',role:'assistant',content:'PREFIX'}]});
   const context={preset:p,world:{time:'day'},chatHistory:[{role:'user',content:'question'},{role:'assistant',content:'answer'}]};
   const {body}=prepareTextRequest(profile,'task',context);
-  assert.deepEqual(body.messages.map(m=>m.role),['system','system','user','assistant','user','assistant']);
-  assert.equal(body.messages[0].content,'WORLD:{"time":"day"}');assert.equal(body.messages.at(-1).content,'PREFIX');
-  assert.equal(JSON.parse(body.messages.at(-2).content).context.chatHistory,undefined);
+  assert.deepEqual(body.messages.map(m=>m.role),['system','system','user','assistant','user','assistant','user']);
+  assert.equal(body.messages[0].content,'WORLD:{"time":"day"}');assert.equal(body.messages.at(-2).content,'PREFIX');
+  assert.equal(JSON.parse(body.messages.at(-3).content).context.chatHistory,undefined);
   assert.ok(!JSON.stringify(body).includes('creativePreset'));
 });
 test('trigger filters, original override, and same-role squashing do not move the new-chat marker',()=>{

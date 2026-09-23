@@ -57,3 +57,30 @@ test('user-supplied preset request compatibility (read-only, no model call)',{sk
   assert.equal(preset.parameters.openai_max_tokens,65535);assert.equal(body.max_tokens,65535);
   assert.equal(preset.regexScripts.length,11);assert.ok(body.messages.length>1);
 });
+
+
+test('assistant预填及末尾system条目之后补用户轮次，保留预设顺序与原始数据',async()=>{
+  for(const suffix of [[],[{identifier:'last-system',role:'system',content:'格式要求'}]]){
+    const preset=importPreset({prompts:[{identifier:'chatHistory',marker:true},{identifier:'prefill',role:'assistant',content:'准备开始'},...suffix]});
+    const snapshot=structuredClone(preset),gemini={...profile,model:'gemini-test'};
+    const {body,resolved}=prepareTextRequest(gemini,'写完整一章',{preset});
+    assert.equal(body.messages.at(-1).role,'user');
+    assert.equal(body.messages.find(m=>m.role==='assistant').content,'准备开始');
+    assert.deepEqual(preset,snapshot);assert.match(resolved.warnings.join(''),/模型消息结尾/);
+    let calls=0;
+    const provider=new Provider(async(_url,options)=>{
+      calls++;const messages=JSON.parse(options.body).messages;
+      if(messages.filter(m=>m.role!=='system').at(-1).role!=='user')return Response.json({error:{message:'Requests ending with a model turn are not supported'}},{status:400});
+      return Response.json({choices:[{message:{content:'正常正文'},finish_reason:'stop'}]});
+    });
+    assert.equal(await provider.text(gemini,'写完整一章',{preset}),'正常正文');assert.equal(calls,1);
+  }
+});
+
+test('已经以用户消息结尾或JSON任务不追加多余轮次',()=>{
+  const preset=importPreset({prompts:[{identifier:'prefill',role:'assistant',content:'参考'},{identifier:'chatHistory',marker:true}]});
+  const {body}=prepareTextRequest(profile,'任务',{preset});
+  assert.equal(body.messages.length,3);assert.equal(JSON.parse(body.messages.at(-1).content).task,'任务');
+  const structured=prepareTextRequest(profile,'审核',{preset},{json:true});
+  assert.deepEqual(structured.body.messages.map(m=>m.role),['system','user']);
+});

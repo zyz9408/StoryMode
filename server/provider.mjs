@@ -13,10 +13,21 @@ export function prepareTextRequest(profile, task, context, { json = false } = {}
   // Never evaluate creative macros, inject history roles, or apply preset
   // sampling/stop/output regexes to a structured request, including repairs.
   const resolved = !json && preset ? resolvePreset(preset, {...storyContext,macroState}, {history:chatHistory,generationType:'normal',taskMessage}) : null;
-  const messages = resolved ? resolved.messages : [
+  let messages = resolved ? resolved.messages : [
     {role:'system',content:json ? structuredInstructions : instructions + '\n只输出小说正文，不要标题、字数统计、作者说明或总结。'},
     {role:'user',content:taskMessage},
   ];
+  // Some presets end in an assistant prefill (possibly followed by system
+  // instructions). Gemini requires the final conversational turn to be user.
+  const lastTurn=messages.findLast(m=>m.role!=='system' && typeof m.content==='string' && m.content.trim());
+  if(lastTurn?.role==='assistant' || lastTurn?.role==='model') {
+    messages=[...messages,{role:'user',content:'请依据前面的当前写作任务、故事上下文和预设继续生成完整回复，保持原任务要求的输出格式。'}];
+    if(resolved) {
+      resolved.messages=messages;
+      resolved.characters=messages.reduce((n,m)=>n+m.content.length,0);
+      resolved.warnings.push('预设以模型消息结尾，发送时已追加用户续写指令，以兼容不支持模型末轮的接口；预设原文未修改。');
+    }
+  }
   const adapted=adaptTextParameters(profile,resolved?.parameters);
   if(resolved) {resolved.warnings.push(...adapted.warnings);resolved.parameters=adapted.parameters;}
   return {resolved,body:{...adapted.parameters,model:profile.model,messages,stream:profile.stream !== false}};
