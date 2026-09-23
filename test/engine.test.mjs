@@ -62,9 +62,9 @@ test('不足15章时只有阶段性胜利、缺少终局证据仍不能完结',a
   const h=await harness(t,{ending:4,noDecisions:true,incompleteEnding:true});await finish(h);
   const s=h.store.story(h.id);assert.equal(s.status,'failed');assert.equal(h.store.chapters(h.id).length,3);assert.equal(s.evaluation,null);assert.ok(s.draft.body);
 });
-test('整章流式中断保留草稿片段，恢复不拼入损坏片段',async t=>{
+test('整章流式中断后自动非流式恢复，不拼入残片或重复扣资源',async t=>{
   const h=await harness(t,{disconnectSceneOnce:true});await h.engine.start(h.id);
-  const s=h.store.story(h.id);assert.equal(s.status,'failed');assert.equal(s.draft.parts.length,0);assert.match(s.draft.partial,/临时草稿/);assert.equal(h.store.chapters(h.id).length,0);
+  const s=h.store.story(h.id);assert.equal(s.status,'waiting_decision');assert.equal(h.store.chapters(h.id).length,3);assert.equal(s.world.resources[0].quantity,2397);assert.ok(h.mock.calls.some(c=>c.body.stream===false));
   await finish(h);assert.equal(h.store.story(h.id).status,'completed',h.store.story(h.id).error);assert.ok(!h.store.chapters(h.id)[0].body.includes('临时草稿'));
 });
 test('关闭联网时旧考据检查点直接继续推演',async t=>{

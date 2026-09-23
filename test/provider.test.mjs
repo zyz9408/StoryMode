@@ -61,3 +61,24 @@ test('图片 URL 下载和非法图片响应',async()=>{
 test('Windows DPAPI 往返加密，密文不含原始 Key', {skip:process.platform!=='win32'}, async()=>{
   const key='test-local-dpapi-key';const encrypted=await protect(key);assert.ok(encrypted);assert.ok(!encrypted.includes(key));assert.equal(await unprotect(encrypted),key);
 });
+
+
+test('缺少流结束标记时仅重试一次非流式，残片不拼入正文',async()=>{
+  const streams=[],tokens=[];let fallbacks=0;
+  const provider=new Provider(async(_url,options)=>{
+    const body=JSON.parse(options.body);streams.push(body.stream);
+    return body.stream?new Response('data: {"choices":[{"delta":{"content":"残片"}}]}\n\n',{headers:{'content-type':'text/event-stream'}}):Response.json({choices:[{message:{content:'完整替代正文'},finish_reason:'stop'}]});
+  });
+  assert.equal(await provider.text(profile,'正文',{}, {onToken:t=>tokens.push(t),onFallback:()=>fallbacks++}),'完整替代正文');
+  assert.deepEqual(streams,[true,false]);assert.deepEqual(tokens,['残片']);assert.equal(fallbacks,1);
+});
+test('非流式恢复仍失败时停止，主动暂停与输出超限不自动重试',async()=>{
+  let calls=0;
+  const incomplete=new Provider(async()=>{calls++;return new Response('data: {"choices":[{"delta":{"content":"残片"}}]}\n\n',{headers:{'content-type':'text/event-stream'}});});
+  await assert.rejects(incomplete.text(profile,'正文',{}),/未完整结束/);assert.equal(calls,2);
+  calls=0;const length=new Provider(async()=>{calls++;return new Response('data: {"choices":[{"delta":{"content":"残片"},"finish_reason":"length"}]}\n\ndata: [DONE]\n\n',{headers:{'content-type':'text/event-stream'}});});
+  await assert.rejects(length.text(profile,'正文',{}),/截断/);assert.equal(calls,1);
+  calls=0;const controller=new AbortController();
+  const paused=new Provider(async()=>{calls++;controller.abort();return new Response('data: {"choices":[{"delta":{"content":"残片"}}]}\n\n',{headers:{'content-type':'text/event-stream'}});});
+  await assert.rejects(paused.text(profile,'正文',{}, {signal:controller.signal}));assert.equal(calls,1);
+});

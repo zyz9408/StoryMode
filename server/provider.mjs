@@ -102,11 +102,21 @@ export class Provider {
     if (!Array.isArray(data.data)) throw new Error('接口未返回兼容的模型列表，可手动填写模型名');
     return data.data.map(m => m.id).filter(x => typeof x === 'string').sort();
   }
-  async text(profile, task, context, { signal, onToken, onResponse, json = false } = {}) {
+  async text(profile, task, context, options = {}) {
+    try { return await this.textOnce(profile,task,context,options); }
+    catch(error) {
+      if(options.signal?.aborted || profile.stream===false || error.code!=='STREAM_INCOMPLETE')throw error;
+      options.onFallback?.();
+      // A fresh complete response replaces the draft; never concatenate the
+      // broken stream with the replacement or emit duplicate token callbacks.
+      return this.textOnce({...profile,stream:false},task,context,{...options,onToken:options.onToken?()=>{}:undefined});
+    }
+  }
+  async textOnce(profile, task, context, { signal, onToken, onResponse, json = false } = {}) {
     if (!profile.model.trim()) throw new Error('请先填写或选择文字模型，并保存配置');
     const {resolved,body} = prepareTextRequest(profile,task,context,{json});
     const transform = text => resolved ? resolved.transformOutput(text) : text;
-    const bufferOutput = !json && context.preset?.regexScripts?.some(s=>!s.disabled && !s.markdownOnly && !s.promptOnly && s.placement.includes(2));
+    const bufferOutput = !json && context.preset?.regexScripts?.some(s=>!s.groupDisabled && !s.disabled && !s.markdownOnly && !s.promptOnly && s.placement.includes(2));
     const emit = token => { if (!bufferOutput) onToken?.(token); };
     // Whole chapters can outlast the previous per-scene timeout on slower models.
     const r = await this.request(profile, 'chat/completions', body, signal, json || !onToken ? 180000 : 600000);
@@ -143,11 +153,12 @@ export class Provider {
     } catch (e) {
       if (bufferOutput && result) onToken?.(transform(result));
       if (signal?.aborted) throw new Error('已暂停');
-      throw new Error(e.message?.startsWith('供应商') ? e.message : '流式连接中断，已保留草稿，请重试');
+      if(e.message?.startsWith('供应商'))throw e;
+      throw Object.assign(new Error('流式连接中断，已保留草稿，请重试'),{code:'STREAM_INCOMPLETE'});
     }
     if (!complete || truncated || !result.trim()) {
       if (bufferOutput && result) onToken?.(transform(result));
-      throw new Error(truncated ? '模型输出达到上限被截断，请更换模型或调整供应商上限' : '流式响应未完整结束，已保留草稿');
+      throw Object.assign(new Error(truncated ? '模型输出达到上限被截断，请更换模型或调整供应商上限' : '流式响应未完整结束，已保留草稿；可关闭模型配置中的流式输出后继续'),{code:!truncated&&!complete?'STREAM_INCOMPLETE':'MODEL_OUTPUT_INCOMPLETE'});
     }
     const output = transform(result);
     onResponse?.({originalResponse:result,response:output,finishReason});
