@@ -32,7 +32,7 @@ test('实际 HTTP 模拟接口：15 章、三次决策、资源与评价完整�
   assert.equal(s.status,'completed',s.error);assert.equal(chapters.length,15);assert.equal(s.decisions.length,3);
   assert.equal(s.grounding,'model');assert.equal(s.sources.length,0);assert.equal(s.researchNotes.length,0);
   assert.equal(s.world.resources[0].quantity,2385);assert.equal(s.world.elapsedDays,15);
-  assert.ok(chapters.every(c=>c.words>=3000&&c.words<=8000));assert.equal(s.evaluation.dimensions.length,6);
+  assert.ok(chapters.every(c=>c.words>=3000));assert.equal(s.evaluation.dimensions.length,6);
   assert.ok(h.mock.calls.every(c=>c.path==='/v1/chat/completions'&&!c.body.tools&&!c.body.web_search_options));
 });
 test('历史改写采用历史人物中心，并支持非流式生成至30章上限',async t=>{

@@ -39,11 +39,11 @@ test('正文缺失或引用段号越界不能通过，未完结和正确依据�
   await recoverEndingEvidence(noCall,{},body,{finished:false});
   await recoverEndingEvidence(noCall,{},Object.values(endingEvidence).join('\n'),{finished:true,ending:endingEvidence});
 });
-test('定向补写只补所缺项且保留原正文，超长则交由完整修订处理',async()=>{
+test('定向补写只补所缺项且保留原正文，超长也保留完整补写',async()=>{
   const review={finished:true,ending:endingEvidence};
   const body=Object.entries(endingEvidence).filter(([k])=>!['keyPeopleFates','eraClosure'].includes(k)).map(([,v])=>v).join('\n');
   const provider={json:async(p,t,c)=>({passages:Object.keys(c.missing).map(key=>({key,text:endingEvidence[key]}))})};
   const result=await supplementEnding(provider,{},body,review,{});
   assert.ok(result.startsWith(body));assert.ok(result.includes(endingEvidence.keyPeopleFates));assert.ok(result.includes(endingEvidence.eraClosure));
-  assert.equal(await supplementEnding(provider,{},'字'.repeat(8000)+body,review,{}),null);
+  assert.ok((await supplementEnding(provider,{},'字'.repeat(8000)+body,review,{})).startsWith('字'.repeat(8000)+body));
 });

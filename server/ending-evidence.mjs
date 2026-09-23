@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { endingIssues, countWords } from './schema.mjs';
+import { endingIssues } from './schema.mjs';
 
 export const endingLabels = {
   protagonistDeath:'主角晚年、死亡时间与死因（明确无法死亡的设定须交代不可逆终末归宿）',
@@ -27,7 +27,7 @@ export async function supplementEnding(provider,profile,body,review,context,sign
   const selected=result.passages.filter(p=>missing.includes(p.key));
   if(missing.some(key=>selected.filter(p=>p.key===key).length!==1))throw new Error('终局补写未完整返回所需条目，原草稿已保留，请继续重试');
   const revised=body+'\n\n'+selected.map(p=>p.text).join('\n\n');
-  return countWords(revised)<=8000?revised:null;
+  return revised;
 }
 
 export async function recoverEndingEvidence(provider,profile,body,review,signal) {

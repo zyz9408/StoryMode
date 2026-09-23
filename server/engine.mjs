@@ -134,7 +134,7 @@ export class Engine extends EventEmitter {
         if (terminal && !review.finished) issues.push('已到计划终章，必须写完整人生、组织及时代终局，不能再扩展后续大纲');
         d.finalizing = terminal || review.finished;
         const words = countWords(d.body);
-        if (words < 3000 || words > 8000) issues.push(`正文为${words}字，需要3000～8000字`);
+        if (words < 3000) issues.push(`正文为${words}字，至少需要3000字`);
         // A planned chapter is only a candidate: no quota and no routine choices.
         if (!allowDecision || review.finished || !review.decision?.major || !review.decision.stakes.trim()) review.decision = null;
         d.issues = issues; this.checkpoint(s, signal);
@@ -149,7 +149,7 @@ export class Engine extends EventEmitter {
           if (supplemented) { d.body = supplemented; this.checkpoint(s, signal); continue; }
         }
         let lastSave = 0;
-        const revised = await this.provider.text(profile, '按审核问题修订完整一章，只返回完整小说正文。必须3000～8000个非标点文字。通过增加必要行动、阻碍与后果补足，禁止复述凑字数。保留已通过的情节和人物动机，不修改此前章节。' + pacing + (d.finalizing ? endingPolicy + '对缺失的终局项逐项补齐实际发生的后传事实，明确重要配角姓名及其最终归宿、时代结束的时间与原因及接替秩序。保留已经完成的其他终局项；不能只改措辞或反复描述胜利。' : ''), { ...this.context(s), endingRequirements:d.finalizing ? endingLabels : undefined, number, isDecision, allowDecision, terminal: d.finalizing, plan: d.plan, body: d.body, issues }, { signal, onFallback:()=>{s.progress='流式响应中断，正在非流式重试一次；已有草稿保留';this.checkpoint(s,signal);}, onToken: token => {
+        const revised = await this.provider.text(profile, '按审核问题修订完整一章，只返回完整小说正文。至少3000个非标点文字。通过增加必要行动、阻碍与后果补足，禁止复述凑字数。保留已通过的情节和人物动机，不修改此前章节。' + pacing + (d.finalizing ? endingPolicy + '对缺失的终局项逐项补齐实际发生的后传事实，明确重要配角姓名及其最终归宿、时代结束的时间与原因及接替秩序。保留已经完成的其他终局项；不能只改措辞或反复描述胜利。' : ''), { ...this.context(s), endingRequirements:d.finalizing ? endingLabels : undefined, number, isDecision, allowDecision, terminal: d.finalizing, plan: d.plan, body: d.body, issues }, { signal, onFallback:()=>{s.progress='流式响应中断，正在非流式重试一次；已有草稿保留';this.checkpoint(s,signal);}, onToken: token => {
           d.partial += token; this.emit(s.id, { type: 'token', number, token });
           if (Date.now() - lastSave > 1200) { this.store.saveStory(s); lastSave = Date.now(); }
         } });
@@ -219,7 +219,7 @@ export class Engine extends EventEmitter {
       }
       if (!review.passed) d.issues.push('重写与原有剧情不一致');
       const words = countWords(d.body);
-      if (words < 3000 || words > 8000) d.issues.push(`正文为${words}字，需要3000～8000字`);
+      if (words < 3000) d.issues.push(`正文为${words}字，至少需要3000字`);
       this.checkpoint(s, signal);
       if (!d.issues.length) {
         const chapter = { ...original, body: d.body, words, ending: original.ending ? review.ending : original.ending, rewrittenAt: new Date().toISOString() };
@@ -258,7 +258,7 @@ export class Engine extends EventEmitter {
       d.issues = [...validateTransition(s.world, review, d.number), ...narrativeIssues(d.body), ...endingIssues(d.body, review)];
       if (!review.finished || review.remaining.length || review.decision) d.issues.push('终局必须完成，不能留下后续大纲或待定选择');
       const words = countWords(d.body);
-      if (words < 3000 || words > 8000) d.issues.push(`正文为${words}字，需要3000～8000字`);
+      if (words < 3000) d.issues.push(`正文为${words}字，至少需要3000字`);
       this.checkpoint(s, signal);
       if (!d.issues.length) {
         const chapter = { ...original, body: d.body, words, summary: review.summary, change: review.meaningfulChange, world: review.world,
