@@ -146,3 +146,18 @@ test('删除预设需确认、拒绝生成中删除，解绑关联故事而保�
   assert.equal(store.story(story.id).presetId,'');assert.equal(store.story(story.id).presetEnabled,false);
   assert.equal(store.story(story.id).event,'测试');
 });
+
+
+test('每次文件导入分配独立正则组，同名文件不合并，组停用不改变单条开关',async()=>{
+  const {importRegex,exportPreset}=await import('../server/presets.mjs');
+  const {applyRegex}=await import('../server/tavern-regex.mjs');
+  const raw=[{scriptName:'a',findRegex:'/甲/g',replaceString:'乙',placement:[2]},{scriptName:'b',findRegex:'/乙/g',replaceString:'丙',placement:[2]}];
+  const first=importRegex(raw,'同名.json'),second=importRegex(raw,'同名.json');
+  assert.equal(first[0].groupId,first[1].groupId);assert.notEqual(first[0].groupId,second[0].groupId);
+  assert.equal(first[0].groupName,'同名');assert.equal(applyRegex('甲',first,2),'丙');
+  const disabled=first.map(s=>({...s,groupDisabled:true}));assert.equal(applyRegex('甲',disabled,2),'甲');assert.equal(disabled[0].disabled,false);
+  const preset=importPreset({prompts:[{identifier:'main',content:'测试'}],extensions:{regex_scripts:raw}},'原预设.json');
+  assert.equal(preset.regexScripts[0].groupName,'原预设');assert.equal(preset.regexScripts[0].groupId,preset.regexScripts[1].groupId);
+  preset.regexScripts.push(...disabled);
+  assert.deepEqual(importPreset(exportPreset(preset)).regexScripts,preset.regexScripts);
+});

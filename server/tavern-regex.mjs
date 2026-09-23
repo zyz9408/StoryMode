@@ -15,7 +15,7 @@ export function escapeRegexMacro(value) {
 }
 
 export function runRegex(script, text, substitute = value => value) {
-  if (script.disabled || !script.findRegex || !text) return text;
+  if (script.groupDisabled || script.disabled || !script.findRegex || !text) return text;
   const pattern = Number(script.substituteRegex) === 1 ? substitute(script.findRegex)
     : Number(script.substituteRegex) === 2 ? substitute(script.findRegex, escapeRegexMacro) : script.findRegex;
   const regex = regexFromString(pattern);

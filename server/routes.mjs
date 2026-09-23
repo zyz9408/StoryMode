@@ -64,8 +64,8 @@ export function registerRoutes(app, { store, engine, provider, imagery, storyLoc
   });
   app.post('/api/presets/:id/regex/import', {bodyLimit:Number.MAX_SAFE_INTEGER}, async req=>{
     const preset=store.preset(req.params.id); if (!preset) throw new Error('预设不存在');
-    const {source} = z.object({source:z.string()}).parse(req.body);
-    return store.savePreset(presetSchema.parse({...preset,regexScripts:[...(preset.regexScripts || []),...importRegex(source)]}));
+    const {source,filename} = z.object({source:z.string(),filename:z.string().default('导入正则')}).parse(req.body);
+    return store.savePreset(presetSchema.parse({...preset,regexScripts:[...(preset.regexScripts || []),...importRegex(source,filename)]}));
   });
   app.get('/api/presets/:id/export', async (req, reply) => {
     const preset=store.preset(req.params.id); if (!preset) throw new Error('预设不存在');

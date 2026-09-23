@@ -217,3 +217,5 @@ python -m unittest discover -s test -p test_launcher.py
 协议参考：[Node.js SQLite](https://nodejs.org/api/sqlite.html)、[Fastify](https://fastify.dev/docs/latest/Reference/Server/)。
 
 模型描述兼容：`scenes`、`issues`、`decision.options` 以及世界状态中的 `relationships`、`factions`、`conflicts` 统一支持字符串、对象和嵌套描述。对象会按字段保留信息并转成可读字符串；空对象仍拒绝，资源数量、时间和资源流水继续严格校验。
+
+正则按导入来源分组：每次导入 JSON 或从预设读取的规则形成独立组，同名文件重复导入也不合并。正则页可选择组、整组启停或删除，组内保留单条编辑和删除，修改保存后生效。旧存档的未分组规则归入“原有正则”；选择组仅筛选编辑，是否执行由组和单条的启停状态共同决定。

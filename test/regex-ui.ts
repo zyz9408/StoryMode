@@ -33,6 +33,15 @@ export function registerRegexUiTest() {
     await expect(page.getByRole('status')).toContainText('已读取并保存 1 条正则');
     await expect(editor.getByRole('button',{name:/提取的规则/})).toBeVisible();
     await expect(editor.locator('.editor-list-row')).toHaveCount(3);
+    const groups=editor.getByLabel('选择正则组',{exact:true});
+    await expect(groups.locator('option')).toHaveCount(4);
+    await groups.selectOption({label:'其他预设 · 1 条'});
+    await expect(editor.locator('.editor-list-row')).toHaveCount(1);
+    await editor.getByLabel('启用当前正则组',{exact:true}).uncheck();
+    await page.getByRole('button',{name:'保存预设',exact:true}).click();
+    await expect(page.getByRole('status')).toContainText('已保存');
+    await groups.selectOption('');
+
     await expect(page.getByLabel('预设名称',{exact:true})).toHaveValue('正则测试');
     await editor.getByRole('button',{name:/手动规则/}).click();
     await editor.getByText('测试当前规则',{exact:true}).click();
@@ -51,8 +60,12 @@ export function registerRegexUiTest() {
     const download=await downloadPromise;expect(download.suggestedFilename()).toBe('regex-scripts.json');
     const stream=await download.createReadStream();let text='';for await(const chunk of stream!)text+=chunk.toString();
     expect(JSON.parse(text).map((s:{scriptName:string})=>s.scriptName)).toEqual(['预设内置规则','手动规则','提取的规则']);
-    await editor.getByRole('button',{name:'删除当前正则',exact:true}).click();
+    await groups.selectOption({label:'手动添加 · 1 条'});
+    page.once('dialog',dialog=>dialog.dismiss());await editor.getByRole('button',{name:'删除当前正则组',exact:true}).click();
+    await expect(editor.locator('.editor-list-row')).toHaveCount(1);
+    page.once('dialog',dialog=>dialog.accept());await editor.getByRole('button',{name:'删除当前正则组',exact:true}).click();
     await expect(editor.locator('.editor-list-row')).toHaveCount(2);
+    await editor.getByRole('button',{name:/提取的规则/}).click();
     await expect(editor.getByLabel('脚本名称')).toHaveValue('提取的规则');
     await page.getByRole('button',{name:'保存预设',exact:true}).click();
     await expect(page.getByRole('status')).toContainText('已保存');
@@ -60,6 +73,7 @@ export function registerRegexUiTest() {
     await page.getByRole('tab',{name:'正则',exact:false}).click();
     await expect(editor.locator('.editor-list-row')).toHaveCount(2);
     await expect(editor.getByRole('button',{name:/手动规则/})).toHaveCount(0);
+    await groups.selectOption({label:'其他预设 · 1 条'});await expect(editor.getByLabel('启用当前正则组',{exact:true})).not.toBeChecked();await groups.selectOption('');
     page.once('dialog',dialog=>dialog.dismiss());
     await editor.getByRole('button',{name:'清空全部正则',exact:true}).click();
     await expect(editor.locator('.editor-list-row')).toHaveCount(2);

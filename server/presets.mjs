@@ -6,6 +6,7 @@ const slots = new Set(['chathistory','worldinfobefore','worldinfoafter','chardes
 const parameterKeys = ['temperature','top_p','frequency_penalty','presence_penalty','top_k','top_a','min_p','repetition_penalty','seed','openai_max_tokens','reasoning_effort','verbosity','stop'];
 const settingKeys = ['new_chat_prompt','new_example_chat_prompt','send_if_empty','squash_system_messages','continue_prefill','continue_nudge_prompt','assistant_prefill','wi_format','scenario_format','personality_format','names_behavior','openai_max_context','openai_max_tokens','custom_prompt_post_processing'];
 export const regexSchema = z.object({
+  groupId:z.string().min(1).default('legacy'),groupName:z.string().default('原有正则'),groupDisabled:z.boolean().default(false),
   id:z.string().optional(), scriptName:z.string().default('正则'), findRegex:z.string(), replaceString:z.string().default(''),
   trimStrings:z.array(z.string()).default([]), placement:z.array(z.number().int()).default([2]),
   disabled:z.boolean().default(false), markdownOnly:z.boolean().default(false), promptOnly:z.boolean().default(false),
@@ -44,11 +45,12 @@ function parseSource(raw) {
   }
   return raw;
 }
-export function importRegex(raw) {
+export function importRegex(raw, filename) {
   raw = parseSource(raw);
   const list = Array.isArray(raw) ? raw : presetRegexSource(raw) ?? (raw?.findRegex != null ? [raw] : null);
   if (!Array.isArray(list)) throw new Error('未找到 SillyTavern 正则脚本');
-  return list.map(item=>regexSchema.parse({...item,id:item.id || randomUUID()}));
+  const groupId=randomUUID();
+  return list.map(item=>regexSchema.parse({...item,id:item.id || randomUUID(),...(filename?{groupId,groupName:filename.replace(/\.json$/i,''),groupDisabled:false}:{})}));
 }
 export function importPreset(raw, filename = '导入预设') {
   raw = parseSource(raw);
@@ -73,7 +75,8 @@ export function importPreset(raw, filename = '导入预设') {
   for (const p of byId.values()) if (!used.has(p.identifier)) entries.push({...p,enabled:order ? false : p.enabled});
   const parameters = Object.fromEntries(parameterKeys.filter(k=>raw[k] !== undefined).map(k=>[k,raw[k]]));
   const settings = Object.fromEntries(settingKeys.filter(k=>raw[k] !== undefined).map(k=>[k,raw[k]]));
-  const regexScripts = presetRegexSource(raw) ?? [];
+  const groupId=randomUUID();
+  const regexScripts = (presetRegexSource(raw) ?? []).map(item=>({...item,groupId:item.groupId||groupId,groupName:item.groupName||raw.name||filename.replace(/\.json$/i,'')}));
   const warnings = [];
   if (orders.length>1) warnings.push(`当前采用 ${order.character_id} 编排；其他编排保留在导出文件中。`);
   if (Object.keys(raw.extensions || {}).some(k=>k !== 'regex_scripts')) warnings.push('附带扩展数据已保留；需要 SillyTavern 扩展运行时的脚本不会执行。');
@@ -106,7 +109,7 @@ export function resolvePreset(preset, context = {}, { history = context.chatHist
   const diagnostics = [...p.warnings];
   if (settings.custom_prompt_post_processing && settings.custom_prompt_post_processing!=='none') diagnostics.push(`尚未应用供应商专用消息后处理：${settings.custom_prompt_post_processing}`);
   if (settings.openai_max_context) diagnostics.push('上下文上限已保留；当前未启用 SillyTavern 模型分词器的 token 裁剪，超长请求由供应商报错。');
-  for (const script of p.regexScripts) if (!script.disabled && !script.substituteRegex && !regexFromString(script.findRegex)) diagnostics.push(`正则「${script.scriptName}」表达式无效，已跳过。`);
+  for (const script of p.regexScripts) if (!script.groupDisabled && !script.disabled && !script.substituteRegex && !regexFromString(script.findRegex)) diagnostics.push(`正则「${script.scriptName}」表达式无效，已跳过。`);
   const process = (text, placement, options={})=>applyRegex(text,p.regexScripts,placement,{...options,substitute:sub});
   const format = (template, text, macro) => text ? sub((template || `{{${macro}}}`).replaceAll(`{{${macro}}}`,()=>text).replaceAll('{0}',()=>text)) : '';
   const slotContent = {
