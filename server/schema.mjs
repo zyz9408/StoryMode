@@ -86,7 +86,7 @@ export const evaluationSchema = z.object({
 export function storyProse(body) {
   // Only complete, explicitly recognised non-story blocks are excluded.
   // Keep the stored response untouched for preset display and export.
-  return body.replace(/<(konatan_planning~|tucao|think|thinking|analysis|planning)\s*>[\s\S]*?<\/\1\s*>/gi, '');
+  return body.replace(/<(konatan_planning~|tucao|think|thinking|analysis|planning|current_event|progress|advice)\s*>[\s\S]*?<\/\1\s*>/gi, '');
 }
 export function countWords(s) { return [...storyProse(s)].filter(c => /[\p{L}\p{N}]/u.test(c)).length; }
 export function narrativeIssues(body) {
