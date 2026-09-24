@@ -39,3 +39,19 @@ test('仅推理响应重试时取消强制推理和停止词，保留token预算
   assert.equal(requests[1].reasoning_effort,undefined);assert.equal(requests[1].stop,undefined);assert.equal(requests[1].max_tokens,4096);
   assert.match(requests[1].messages.at(-1).content,/完整小说正文/);assert.ok(!JSON.stringify(requests[1]).includes('内部推理不应重发'));assert.deepEqual(preset,before);
 });
+
+
+test('连续空正文保存两次诊断，记录实际参数与字段，不含密钥或推理内容',async()=>{
+  const {importPreset}=await import('../server/presets.mjs');
+  const preset=importPreset({stop:['END'],openai_max_tokens:4096,prompts:[{identifier:'main',content:'写作'}]});
+  const requests=[];const provider=new Provider(async(_url,options)=>{requests.push(JSON.parse(options.body));return response({content:null,extra:'不应输出的字段内容'});});
+  await assert.rejects(provider.text({...profile,apiKey:'secret-key'},'写作',{preset}),e=>{
+    assert.equal(e.details.kind,'model_text');assert.equal(e.details.attempts.length,2);
+    const first=JSON.parse(e.details.attempts[0].response),last=JSON.parse(e.details.attempts[1].response);
+    assert.equal(first.contentType,'null');assert.equal(first.request.stopCount,1);assert.equal(last.request.stopCount,0);
+    assert.equal(last.request.max_tokens,4096);assert.ok(first.messageFields.includes('extra'));
+    assert.ok(!JSON.stringify(e.details).includes('secret-key'));assert.ok(!JSON.stringify(e.details).includes('不应输出的字段内容'));return true;
+  });assert.equal(requests.length,2);
+  const reasoning=new Provider(async()=>response({content:null,reasoning_content:'不能暴露的推理'}));
+  await assert.rejects(reasoning.text(profile,'写作',{}),e=>!!e.details&&!JSON.stringify(e.details).includes('不能暴露的推理'));
+});

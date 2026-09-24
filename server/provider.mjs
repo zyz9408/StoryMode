@@ -1,4 +1,4 @@
-import { answerText, emptyAnswerError } from './model-text.mjs';
+import { answerText, emptyAnswerError, responseFailure } from './model-text.mjs';
 import { fromBase64, toBase64, concatBytes } from './bytes.mjs';
 import { parseJson } from './schema.mjs';
 import { resolvePreset } from './presets.mjs';
@@ -104,14 +104,24 @@ export class Provider {
     return data.data.map(m => m.id).filter(x => typeof x === 'string').sort();
   }
   async text(profile, task, context, options = {}) {
-    try { return await this.textOnce(profile,task,context,options); }
+    const attempts=[];
+    const invoke=async(p,settings)=>{
+      try{return await this.textOnce(p,task,context,settings);}catch(error){
+        if(error.responseMetadata)attempts.push({number:attempts.length+1,response:error.responseMetadata,originalResponse:error.responseMetadata,finishReason:error.finishReason,reason:error.message});
+        if(attempts.length && !options.signal?.aborted){
+          error.details={...modelDiagnostics(profile,task,context,attempts,[...this.credentials.values()].map(c=>c.key)),kind:'model_text',presetApplied:!options.json&&!!context.preset};
+        }
+        throw error;
+      }
+    };
+    try { return await invoke(profile,options); }
     catch(error) {
       if(options.signal?.aborted || !(error.code==='MODEL_EMPTY_RESPONSE' || error.code==='MODEL_REASONING_ONLY' || (profile.stream!==false && error.code==='STREAM_INCOMPLETE')))throw error;
       if(error.code==='STREAM_INCOMPLETE')options.onFallback?.();
       // A fresh complete response replaces the draft; never concatenate the
       // broken stream with the replacement or emit duplicate token callbacks.
       try {
-        return await this.textOnce({...profile,stream:false},task,context,{...options,finalAnswerRetry:error.code==='MODEL_REASONING_ONLY',onToken:options.onToken?()=>{}:undefined});
+        return await invoke({...profile,stream:false},{...options,finalAnswerRetry:['MODEL_REASONING_ONLY','MODEL_EMPTY_RESPONSE'].includes(error.code),onToken:options.onToken?()=>{}:undefined});
       } catch(retryError) {
         if(retryError.code==='MODEL_REASONING_ONLY')retryError.message='已自动重试一次，模型仍只返回推理而没有最终正文。请检查预设的最大输出 tokens，降低推理强度，或切换能输出正文的模型后继续；已有章节和草稿保留。';
         throw retryError;
@@ -141,7 +151,7 @@ export class Provider {
       const choice=data.choices?.[0],message=choice?.message||{};
       if(!choice)throw new Error('供应商响应缺少 choices，无法读取正文，请检查 Base URL 与接口协议是否匹配');
       const content=answerText(message.content)||answerText(choice.text);
-      if(message.refusal || choice.finish_reason==='content_filter' || !content.trim())throw emptyAnswerError({message,finishReason:choice.finish_reason});
+      if(message.refusal || choice.finish_reason==='content_filter' || !content.trim())throw responseFailure(emptyAnswerError({message,finishReason:choice.finish_reason}),data,body);
       const result = transform(content); if(!result.trim())throw new Error('正文被预设正则处理为空，请检查修改文本的正则规则后继续');onResponse?.({originalResponse:content,response:result,finishReason:data.choices?.[0]?.finish_reason});onToken?.(result); return result;
     }
     let buffer = '', result = '', complete = false, truncated = false, finishReason, hasReasoning=false, hasTools=false, hasRefusal=false;
@@ -176,7 +186,7 @@ export class Provider {
       if(e.message?.startsWith('供应商'))throw e;
       throw Object.assign(new Error('流式连接中断，已保留草稿，请重试'),{code:'STREAM_INCOMPLETE'});
     }
-    if(!truncated && (hasRefusal || finishReason==='content_filter' || (complete&&!result.trim())))throw emptyAnswerError({finishReason,hasReasoning,hasTools,hasRefusal});
+    if(!truncated && (hasRefusal || finishReason==='content_filter' || (complete&&!result.trim())))throw responseFailure(emptyAnswerError({finishReason,hasReasoning,hasTools,hasRefusal}),{choices:[{finish_reason:finishReason,message:{content:result,reasoning_content:hasReasoning?'存在':undefined,tool_calls:hasTools?[{}]:undefined,refusal:hasRefusal?'存在':undefined}}]},body);
     if (!complete || truncated || !result.trim()) {
       if (bufferOutput && result) onToken?.(transform(result));
       throw Object.assign(new Error(truncated ? '模型输出达到上限被截断，请更换模型或调整供应商上限' : '流式响应未完整结束，已保留草稿；可关闭模型配置中的流式输出后继续'),{code:!truncated&&!complete?'STREAM_INCOMPLETE':'MODEL_OUTPUT_INCOMPLETE'});
