@@ -9,7 +9,7 @@ purifier.addHook('uponSanitizeAttribute',(_node,attribute)=>{
 });
 
 export function hasDisplayHtml(text:string) {
-  return /<\/?(?:progress|style|script|div|span|details|summary|section|article|main|p|br|h[1-6]|table|ul|ol|li|blockquote|pre|b|strong|em|i|img)(?:\s[^<>]*|\s*\/?)>/i.test(text);
+  return /<\/?(?:current_event|progress|style|script|div|span|details|summary|section|article|main|p|br|h[1-6]|table|ul|ol|li|blockquote|pre|b|strong|em|i|img)(?:\s[^<>]*|\s*\/?)>/i.test(text);
 }
 
 function displayDocument(text:string,fontSize:number,dark:boolean) {

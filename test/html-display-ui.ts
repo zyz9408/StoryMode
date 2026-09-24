@@ -14,6 +14,24 @@ async function previewCard(page:Page) {
   await page.getByLabel('测试阶段',{exact:true}).selectOption('display');await page.getByRole('button',{name:'运行测试',exact:true}).click();
 }
 export function registerHtmlDisplayUiTests() {
+  test('current_event任务块按字段显示，多行支线和已有进度卡片同时保留',async({page})=>{
+    const block='<current_event>\n当前主线任务: MQ.Ⅲ_体制潜入（进行中）\n当前支线事件:\nSQ.3_初网构建（进行中）\nSQ.7_线索锁定（已完成）\nSQ.8_双盲交锋（进行中）\n最新使用支线事件编号: SQ.8\n</current_event><progress>PG.4\n概括: 事件继续推进。</progress>';
+    await importCard(page,block);await previewCard(page);
+    const frame=page.frameLocator('iframe[title="正则样式预览"]');
+    const card=frame.locator('[data-story-block="current_event"]');
+    await expect(card.locator('summary')).toHaveText('当前任务与事件');
+    await expect(card.locator('dt')).toHaveCount(3);
+    await expect(card.locator('dd').nth(1)).toContainText('SQ.3_初网构建');
+    await expect(card.locator('dd').nth(1)).toContainText('SQ.7_线索锁定（已完成）');
+    await expect(card.locator('dd').nth(1)).toContainText('SQ.8_双盲交锋');
+    await expect(card.locator('dd').last()).toHaveText('SQ.8');
+    await expect(frame.locator('[data-story-block="progress"] summary')).toHaveText('故事进度 · PG.4');
+    await expect(frame.locator('current_event')).toHaveCount(0);
+    await card.locator('summary').click();await expect(card.locator('dl')).toBeHidden();
+    await card.locator('summary').click();await expect(card.locator('dl')).toBeVisible();
+    await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+  });
+
   test('未被正则美化的progress块显示字段卡片，支持折叠和手机布局',async({page})=>{
     const block='<progress>\nPG.4\n时间推进: 一月清晨 → 五月上旬\n地点: 大学校区 ↔ 官署\n主线任务进度: 完成入学与调查\n事件: 完成支线，耗时约110天。\n概括: 主角发现了新的线索。\n</progress>';
     await importCard(page,block);await previewCard(page);
