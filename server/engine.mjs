@@ -1,3 +1,4 @@
+import { needsChapterContinuation, continueChapter } from './chapter-continuation.mjs';
 import { settleScorecard } from './scorecard.mjs';
 import { recoverEndingEvidence, endingLabels, supplementEnding } from './ending-evidence.mjs';
 import { EventEmitter } from './events.mjs';
@@ -147,6 +148,11 @@ export class Engine extends EventEmitter {
           const supplemented = await supplementEnding(this.provider, profile, d.body, review, this.context(s), signal);
           this.guard(signal);
           if (supplemented) { d.body = supplemented; this.checkpoint(s, signal); continue; }
+        }
+        if (needsChapterContinuation(review)) {
+          s.progress = `第 ${number} 章：保留已有正文，续写被截断的情节（${d.repairs}/2）`; this.checkpoint(s, signal);
+          const continued = await continueChapter(this.provider,profile,d.body,{...this.context(s),number,plan:d.plan,isDecision,allowDecision,terminal:d.finalizing},review.issues,signal);
+          this.guard(signal); d.body=continued; d.partial=''; this.checkpoint(s,signal); continue;
         }
         let lastSave = 0;
         const revised = await this.provider.text(profile, '按审核问题修订完整一章，只返回完整小说正文。至少3000个非标点文字。通过增加必要行动、阻碍与后果补足，禁止复述凑字数。保留已通过的情节和人物动机，不修改此前章节。' + pacing + (d.finalizing ? endingPolicy + '对缺失的终局项逐项补齐实际发生的后传事实，明确重要配角姓名及其最终归宿、时代结束的时间与原因及接替秩序。保留已经完成的其他终局项；不能只改措辞或反复描述胜利。' : ''), { ...this.context(s), endingRequirements:d.finalizing ? endingLabels : undefined, number, isDecision, allowDecision, terminal: d.finalizing, plan: d.plan, body: d.body, issues }, { signal, onFallback:()=>{s.progress='流式响应中断，正在非流式重试一次；已有草稿保留';this.checkpoint(s,signal);}, onToken: token => {
