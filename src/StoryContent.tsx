@@ -1,3 +1,4 @@
+import { formatProgressBlocks } from './progress-display';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import DOMPurify from 'dompurify';
 const purifier=DOMPurify(window);
@@ -8,12 +9,12 @@ purifier.addHook('uponSanitizeAttribute',(_node,attribute)=>{
 });
 
 export function hasDisplayHtml(text:string) {
-  return /<\/?(?:style|script|div|span|details|summary|section|article|main|p|br|h[1-6]|table|ul|ol|li|blockquote|pre|b|strong|em|i|img)(?:\s[^<>]*|\s*\/?)>/i.test(text);
+  return /<\/?(?:progress|style|script|div|span|details|summary|section|article|main|p|br|h[1-6]|table|ul|ol|li|blockquote|pre|b|strong|em|i|img)(?:\s[^<>]*|\s*\/?)>/i.test(text);
 }
 
 function displayDocument(text:string,fontSize:number,dark:boolean) {
   const source=text.trim().replace(/^```(?:html)?\s*\n([\s\S]*?)\n```$/i,'$1');
-  const fragment=purifier.sanitize(source,{
+  const fragment=purifier.sanitize(formatProgressBlocks(source),{
     RETURN_DOM_FRAGMENT:true,FORCE_BODY:true,USE_PROFILES:{html:true},ADD_TAGS:['style'],
     FORBID_TAGS:['script','iframe','object','embed','link','meta','base','form','noscript'],
     FORBID_ATTR:['srcdoc','action','formaction','href','target','autofocus'],
@@ -29,7 +30,7 @@ function displayDocument(text:string,fontSize:number,dark:boolean) {
   // The iframe is same-origin for sizing ONLY: scripts remain disabled by both
   // its sandbox (no allow-scripts) and CSP. Styles cannot reach the app or keys.
   const policy="default-src 'none'; script-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src data: blob:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
-  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta http-equiv="Content-Security-Policy" content="${policy}"><style>html,body{margin:0;padding:0;background:transparent;min-height:0}body{color:${dark?'#d7dfce':'#344238'};font:${size}px/2.1 Georgia,"Noto Serif SC","Microsoft YaHei",serif;overflow-x:hidden}#story-display-root{display:flow-root;white-space:pre-wrap;overflow-wrap:anywhere;padding:4px 2px}*{box-sizing:border-box}img{max-width:100%;height:auto}summary{cursor:pointer}pre{white-space:pre-wrap}p{margin:0 0 1em}</style></head><body><main id="story-display-root">${wrapper.innerHTML}</main><style>#story-display-root :where(div,section,article,details,pre,table){max-width:100%;min-width:0}#story-display-root{max-width:100%}</style></body></html>`;
+  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta http-equiv="Content-Security-Policy" content="${policy}"><style>html,body{margin:0;padding:0;background:transparent;min-height:0}body{color:${dark?'#d7dfce':'#344238'};font:${size}px/2.1 Georgia,"Noto Serif SC","Microsoft YaHei",serif;overflow-x:hidden}#story-display-root{display:flow-root;white-space:pre-wrap;overflow-wrap:anywhere;padding:4px 2px}*{box-sizing:border-box}img{max-width:100%;height:auto}summary{cursor:pointer}pre{white-space:pre-wrap}p{margin:0 0 1em}.sm-progress-card{margin:1em 0;padding:16px 20px;border:1px solid currentColor;border-radius:10px;background:rgba(128,145,116,.08);font:14px/1.8 "Microsoft YaHei",sans-serif;white-space:normal}.sm-progress-card summary{font-weight:700;font-size:16px}.sm-progress-card dl{margin:14px 0 0}.sm-progress-card dl>div{display:grid;grid-template-columns:minmax(70px,100px) minmax(0,1fr);gap:12px;padding:9px 0;border-top:1px solid rgba(128,145,116,.2)}.sm-progress-card dt{font-weight:600;opacity:.8}.sm-progress-card dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}@media(max-width:480px){.sm-progress-card{padding:12px}.sm-progress-card dl>div{grid-template-columns:1fr;gap:3px}}</style></head><body><main id="story-display-root">${wrapper.innerHTML}</main><style>#story-display-root :where(div,section,article,details,pre,table){max-width:100%;min-width:0}#story-display-root{max-width:100%}</style></body></html>`;
 }
 
 function HtmlDisplay({text,fontSize,title}:{text:string;fontSize:number;title:string}) {

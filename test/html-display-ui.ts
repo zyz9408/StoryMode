@@ -14,6 +14,20 @@ async function previewCard(page:Page) {
   await page.getByLabel('测试阶段',{exact:true}).selectOption('display');await page.getByRole('button',{name:'运行测试',exact:true}).click();
 }
 export function registerHtmlDisplayUiTests() {
+  test('未被正则美化的progress块显示字段卡片，支持折叠和手机布局',async({page})=>{
+    const block='<progress>\nPG.4\n时间推进: 一月清晨 → 五月上旬\n地点: 大学校区 ↔ 官署\n主线任务进度: 完成入学与调查\n事件: 完成支线，耗时约110天。\n概括: 主角发现了新的线索。\n</progress>';
+    await importCard(page,block);await previewCard(page);
+    const frame=page.frameLocator('iframe[title="正则样式预览"]');
+    await expect(frame.locator('.sm-progress-card')).toHaveCount(1);
+    await expect(frame.locator('.sm-progress-card summary')).toHaveText('故事进度 · PG.4');
+    await expect(frame.locator('.sm-progress-card dt')).toHaveCount(5);
+    await expect(frame.locator('.sm-progress-card dd').first()).toHaveText('一月清晨 → 五月上旬');
+    await expect(frame.locator('progress')).toHaveCount(0);
+    await frame.getByText('故事进度 · PG.4',{exact:true}).click();await expect(frame.locator('.sm-progress-card dl')).toBeHidden();
+    await frame.getByText('故事进度 · PG.4',{exact:true}).click();await expect(frame.locator('.sm-progress-card dl')).toBeVisible();
+    await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+  });
+
   test('正则 HTML 预览显示 CSS 与折叠，自适应高度且不执行脚本或影响父页面',async({page})=>{
     const leaks:string[]=[];page.on('request',req=>{if(req.url().startsWith('https://example.invalid/'))leaks.push(req.url());});
     await importCard(page);const parentColor=await page.locator('body').evaluate(el=>getComputedStyle(el).color);
