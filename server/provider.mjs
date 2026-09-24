@@ -106,16 +106,29 @@ export class Provider {
   async text(profile, task, context, options = {}) {
     try { return await this.textOnce(profile,task,context,options); }
     catch(error) {
-      if(options.signal?.aborted || !(error.code==='MODEL_EMPTY_RESPONSE' || (profile.stream!==false && error.code==='STREAM_INCOMPLETE')))throw error;
+      if(options.signal?.aborted || !(error.code==='MODEL_EMPTY_RESPONSE' || error.code==='MODEL_REASONING_ONLY' || (profile.stream!==false && error.code==='STREAM_INCOMPLETE')))throw error;
       if(error.code==='STREAM_INCOMPLETE')options.onFallback?.();
       // A fresh complete response replaces the draft; never concatenate the
       // broken stream with the replacement or emit duplicate token callbacks.
-      return this.textOnce({...profile,stream:false},task,context,{...options,onToken:options.onToken?()=>{}:undefined});
+      try {
+        return await this.textOnce({...profile,stream:false},task,context,{...options,finalAnswerRetry:error.code==='MODEL_REASONING_ONLY',onToken:options.onToken?()=>{}:undefined});
+      } catch(retryError) {
+        if(retryError.code==='MODEL_REASONING_ONLY')retryError.message='已自动重试一次，模型仍只返回推理而没有最终正文。请检查预设的最大输出 tokens，降低推理强度，或切换能输出正文的模型后继续；已有章节和草稿保留。';
+        throw retryError;
+      }
     }
   }
-  async textOnce(profile, task, context, { signal, onToken, onResponse, json = false } = {}) {
+  async textOnce(profile, task, context, { signal, onToken, onResponse, json = false, finalAnswerRetry = false } = {}) {
     if (!profile.model.trim()) throw new Error('请先填写或选择文字模型，并保存配置');
     const {resolved,body} = prepareTextRequest(profile,task,context,{json});
+    if(finalAnswerRetry) {
+      // Override only the retry request, leaving stored preset settings intact.
+      // Keep the user's token limit; never silently buy a larger generation.
+      delete body.reasoning_effort;delete body.stop;
+      body.messages=[...body.messages,{role:'user',content:json
+        ? '上一请求未返回最终答案。请直接完成原任务，将完整合法的 JSON 对象放入最终回答，不要只返回推理过程。'
+        : '上一请求未返回最终正文。请直接完成原写作任务，将完整小说正文放入最终回答，不要只返回写作计划或推理过程。'}];
+    }
     const transform = text => resolved ? resolved.transformOutput(text) : text;
     const bufferOutput = !json && context.preset?.regexScripts?.some(s=>!s.groupDisabled && !s.disabled && !s.markdownOnly && !s.promptOnly && s.placement.includes(2));
     const emit = token => { if (!bufferOutput) onToken?.(token); };
